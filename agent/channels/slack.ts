@@ -3,13 +3,21 @@ import {
   defaultSlackAuth,
   slackChannel,
 } from 'eve/channels/slack';
-
-const allowedChannelId = 'C0C1GJNPV0V';
+import {
+  isAllowedSlackChannel,
+  slackCommandResponse,
+} from '../../lib/signals/slack-commands';
 
 export default slackChannel({
   credentials: connectSlackCredentials('slack/account-signals-slack'),
-  onAppMention(ctx, message) {
-    if (message.channelId !== allowedChannelId) {
+  async onAppMention(ctx, message) {
+    if (!isAllowedSlackChannel(message.channelId)) {
+      return null;
+    }
+
+    const response = slackCommandResponse(message.text);
+    if (response) {
+      await ctx.thread.post(response.message);
       return null;
     }
 
