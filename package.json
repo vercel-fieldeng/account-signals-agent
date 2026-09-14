@@ -11,6 +11,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "vitest run",
     "eve:build": "eve build",
     "eve:info": "eve info"
   },
@@ -32,6 +33,7 @@
     "@types/react": "19.2.10",
     "@types/react-dom": "19.2.3",
     "tailwindcss": "4.3.3",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "^5.0.0"
   }
 }
