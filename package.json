@@ -16,6 +16,7 @@
     "eve:info": "eve info"
   },
   "dependencies": {
+    "@vercel/blob": "^2.8.0",
     "@vercel/connect": "^2.0.4",
     "@vercel/geistcn": "1.0.3",
     "@vercel/geistcn-assets": "2.0.1",

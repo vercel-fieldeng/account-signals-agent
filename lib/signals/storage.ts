@@ -289,7 +289,6 @@ export class InMemorySignalRepository implements SignalRepository {
   getPreviousSuccessfulBaseline(accountId: string, before?: string) {
     const run = this.listRuns(accountId).find(
       (candidate) =>
-        candidate.status === "succeeded" &&
         this.promotedRunIds.has(candidate.id) &&
         (before === undefined || timestamp(candidate.completedAt) < timestamp(before)),
     )
