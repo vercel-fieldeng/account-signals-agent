@@ -1,5 +1,5 @@
 {
-  "name": "geistcn-starter",
+  "name": "account-signals-slack-agent",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,14 +10,20 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "eve:build": "eve build",
+    "eve:info": "eve info"
   },
   "dependencies": {
+    "@vercel/connect": "^2.0.4",
     "@vercel/geistcn": "1.0.3",
     "@vercel/geistcn-assets": "2.0.1",
+    "ai": "^7.0.99",
+    "eve": "^0.54.3",
     "next": "16.3.4",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",

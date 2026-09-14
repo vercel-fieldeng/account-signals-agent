@@ -4,8 +4,9 @@ import type { Metadata, Viewport } from 'next';
 import { GeistProvider, geistFontClasses } from '@vercel/geistcn/core';
 
 export const metadata: Metadata = {
-  title: 'Geist Design System',
-  description: "Starter built with Vercel's Geist (geistcn) design system.",
+  title: 'Account Signals Slack Agent',
+  description:
+    'A focused eve hello-world agent connected to the Account Signals Slack channel.',
 };
 
 export const viewport: Viewport = {
@@ -13,6 +14,8 @@ export const viewport: Viewport = {
     { media: '(prefers-color-scheme: light)', color: '#ffffff' },
     { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' },
   ],
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default function RootLayout({
