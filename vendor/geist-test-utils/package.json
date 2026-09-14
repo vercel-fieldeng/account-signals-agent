@@ -1,0 +1,14 @@
+{
+  "name": "@vercel/geist-test-utils",
+  "version": "2.0.1",
+  "private": true,
+  "sideEffects": false,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts",
+  "dependencies": {
+    "sluga": "0.2.1"
+  }
+}

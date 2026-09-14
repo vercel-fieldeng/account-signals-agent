@@ -3,3 +3,12 @@
 # starter pins exact, vetted versions, so the hold is disabled to keep
 # installs deterministic for everyone on the team.
 minimumReleaseAge: 0
+
+packages:
+  - 'vendor/*'
+
+overrides:
+  '@vercel/geist-test-utils@2.0.1': 'file:./vendor/geist-test-utils'
+
+onlyBuiltDependencies:
+  - sharp
