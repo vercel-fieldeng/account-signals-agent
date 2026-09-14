@@ -1,4 +1,4 @@
-import type { NormalizedSignal, SignalSource } from "./contracts"
+import type { Snapshot, SourceSystem } from "./contracts"
 
 export type SignalWindow = {
   startedAt: string
@@ -11,11 +11,11 @@ export type SignalSourceContext = {
 }
 
 export type SignalSourceResult = {
-  signals: NormalizedSignal[]
+  snapshots: Snapshot[]
   nextCursor?: string
 }
 
 export interface SignalSourceAdapter {
-  readonly source: SignalSource
+  readonly source: SourceSystem
   collect(context: SignalSourceContext): Promise<SignalSourceResult>
 }

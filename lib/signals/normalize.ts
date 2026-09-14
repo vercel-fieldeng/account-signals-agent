@@ -1,4 +1,5 @@
 import {
+  SCHEMA_VERSION,
   accountSignalSummarySchema,
   normalizedSignalSchema,
   signalDigestSchema,
@@ -37,10 +38,10 @@ export function summarizeAccount(
     right.observedAt.localeCompare(left.observedAt),
   )
   const [latestSignal] = sortedSignals
-  const accountId = latestSignal.accountId
+  const accountId = latestSignal.account.id
 
-  if (sortedSignals.some((signal) => signal.accountId !== accountId)) {
-    throw new Error("All signals in an account summary must share an accountId")
+  if (sortedSignals.some((signal) => signal.account.id !== accountId)) {
+    throw new Error("All signals in an account summary must share an account ID")
   }
 
   const expansionSignals = sortedSignals.filter(
@@ -52,9 +53,7 @@ export function summarizeAccount(
   )
 
   return accountSignalSummarySchema.parse({
-    accountId,
-    accountName: latestSignal.accountName,
-    ownerName: latestSignal.ownerName,
+    account: latestSignal.account,
     asOf,
     expansionScore: scoreSignals(expansionSignals),
     riskScore: scoreSignals(riskSignals),
@@ -73,9 +72,9 @@ export function createSignalDigest(
 ): SignalDigest {
   const signalsByAccount = signals.reduce<Map<string, NormalizedSignal[]>>(
     (groupedSignals, signal) => {
-      const accountSignals = groupedSignals.get(signal.accountId) ?? []
+      const accountSignals = groupedSignals.get(signal.account.id) ?? []
       accountSignals.push(signal)
-      groupedSignals.set(signal.accountId, accountSignals)
+      groupedSignals.set(signal.account.id, accountSignals)
       return groupedSignals
     },
     new Map(),
@@ -90,6 +89,7 @@ export function createSignalDigest(
     )
 
   return signalDigestSchema.parse({
+    schemaVersion: SCHEMA_VERSION,
     generatedAt,
     windowStartedAt,
     windowEndedAt,

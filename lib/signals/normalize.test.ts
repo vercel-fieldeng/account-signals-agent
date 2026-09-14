@@ -1,24 +1,105 @@
 import { describe, expect, it } from "vitest"
-import { normalizedSignalSchema } from "./contracts"
+import {
+  accountSchema,
+  normalizedSignalSchema,
+  observationSchema,
+  runResultSchema,
+  signalCategorySchema,
+  snapshotSchema,
+} from "./contracts"
 import { createSignalDigest, normalizeSignal, summarizeAccount } from "./normalize"
-import { redactedSignals } from "./redacted-fixtures"
+import {
+  redactedAccounts,
+  redactedObservations,
+  redactedRunResult,
+  redactedSignals,
+  redactedSnapshots,
+} from "./redacted-fixtures"
+import { createSignalId, createStableId } from "./stable-id"
 
-describe("signal contracts", () => {
-  it("accepts redacted source-neutral fixtures", () => {
-    expect(redactedSignals.map(normalizeSignal)).toHaveLength(3)
+describe("shared signal contracts", () => {
+  it("validates account, observation, snapshot, signal, and run-result fixtures", () => {
+    expect(redactedAccounts.map((account) => accountSchema.parse(account))).toHaveLength(2)
+    expect(
+      redactedObservations.map((observation) => observationSchema.parse(observation)),
+    ).toHaveLength(4)
+    expect(redactedSnapshots.map((snapshot) => snapshotSchema.parse(snapshot))).toHaveLength(
+      4,
+    )
+    expect(redactedSignals.map(normalizeSignal)).toHaveLength(4)
+    expect(runResultSchema.parse(redactedRunResult).signals).toHaveLength(4)
   })
 
-  it("rejects records that omit account identity", () => {
-    const { accountId: _accountId, ...invalidSignal } = redactedSignals[0]
+  it("covers every supported signal category", () => {
+    expect(new Set(redactedSignals.map((signal) => signal.category))).toEqual(
+      new Set(signalCategorySchema.options),
+    )
+  })
 
-    expect(() => normalizedSignalSchema.parse(invalidSignal)).toThrow()
+  it("requires account, source, observed-at time, evidence, and confidence", () => {
+    const requiredFields = [
+      "account",
+      "source",
+      "observedAt",
+      "evidence",
+      "confidence",
+    ] as const
+
+    for (const field of requiredFields) {
+      const invalidSignal = { ...redactedSignals[0] } as Record<string, unknown>
+      delete invalidSignal[field]
+      expect(normalizedSignalSchema.safeParse(invalidSignal).success).toBe(false)
+    }
+  })
+
+  it("rejects evidence that does not match the signal source", () => {
+    const invalidSignal = {
+      ...redactedSignals[0],
+      evidence: [redactedSignals[2].evidence[0]],
+    }
+
+    expect(normalizedSignalSchema.safeParse(invalidSignal).success).toBe(false)
+  })
+})
+
+describe("stable IDs", () => {
+  it("is deterministic and unambiguous across identity parts", () => {
+    expect(createStableId("signal", "account-1", "record-2")).toBe(
+      createStableId("signal", "account-1", "record-2"),
+    )
+    expect(createStableId("signal", "ab", "c")).not.toBe(
+      createStableId("signal", "a", "bc"),
+    )
+  })
+
+  it("changes when any signal identity field changes", () => {
+    const signal = redactedSignals[0]
+    const originalId = createSignalId(
+      signal.account.id,
+      signal.category,
+      signal.source.system,
+      signal.source.recordId,
+      signal.observedAt,
+    )
+    const changedId = createSignalId(
+      signal.account.id,
+      signal.category,
+      signal.source.system,
+      "different-record",
+      signal.observedAt,
+    )
+
+    expect(originalId).toBe(signal.id)
+    expect(changedId).not.toBe(originalId)
   })
 })
 
 describe("account summaries", () => {
   it("separates expansion and risk signals and scores severity", () => {
     const summary = summarizeAccount(
-      redactedSignals.filter((signal) => signal.accountId === "acct_redacted_001"),
+      redactedSignals.filter(
+        (signal) => signal.account.id === redactedAccounts[0].id,
+      ),
       "2026-09-14T09:00:00.000Z",
     )
 
@@ -31,7 +112,7 @@ describe("account summaries", () => {
   it("rejects mixed-account summaries", () => {
     expect(() =>
       summarizeAccount(redactedSignals, "2026-09-14T09:00:00.000Z"),
-    ).toThrow("share an accountId")
+    ).toThrow("share an account ID")
   })
 })
 
@@ -43,7 +124,7 @@ describe("signal digests", () => {
       "2026-09-14T09:00:00.000Z",
     )
 
-    expect(digest.accounts.map((account) => account.accountName)).toEqual([
+    expect(digest.accounts.map(({ account }) => account.name)).toEqual([
       "Northstar Labs",
       "Harbor Systems",
     ])
