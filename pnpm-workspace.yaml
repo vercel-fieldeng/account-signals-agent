@@ -1,0 +1,5 @@
+# pnpm 11 enables a 24h supply-chain hold (minimumReleaseAge) by default,
+# which blocks fresh installs of recently-published pins (e.g. next). The
+# starter pins exact, vetted versions, so the hold is disabled to keep
+# installs deterministic for everyone on the team.
+minimumReleaseAge: 0
