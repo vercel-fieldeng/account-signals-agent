@@ -105,6 +105,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@vercel/geist-test-utils@2.0.1': file:./vendor/geist-test-utils
+
 importers:
 
   .:
@@ -158,6 +161,12 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
+
+  vendor/geist-test-utils:
+    dependencies:
+      sluga:
+        specifier: 0.2.1
+        version: 0.2.1
 
 packages:
 
@@ -1408,14 +1417,8 @@ packages:
       eve:
         optional: true
 
-  '@vercel/geist-test-utils@2.0.1':
-    resolution: {integrity: sha512-xnwPVwTmekIZrw1hrLCi/x6rbubyhiH6kjuPeZdORAiRLe0CdW+sA0MHuM1OKd5IX275HTK6xu4MER39rcuHzw==}
-    peerDependencies:
-      next: 16.3.1-canary.1
-      react: 19.2.8
-    peerDependenciesMeta:
-      next:
-        optional: true
+  '@vercel/geist-test-utils@file:vendor/geist-test-utils':
+    resolution: {directory: vendor/geist-test-utils, type: directory}
 
   '@vercel/geistcn-assets@2.0.1':
     resolution: {integrity: sha512-ASfBRw9NRwRzU2U3cNRbugMZZkvy4WTZGzrrepmJeguVbtS/i4DauxfYKZTM+tyD9vaQtOKa2NHMke0QUri6BQ==}
@@ -3227,12 +3230,9 @@ snapshots:
       ai: 7.0.99(zod@4.6.5)
       eve: 0.54.3(ai@7.0.99(zod@4.6.5))
 
-  '@vercel/geist-test-utils@2.0.1(next@16.3.4(@types/node@24.0.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)':
+  '@vercel/geist-test-utils@file:vendor/geist-test-utils':
     dependencies:
-      react: 19.2.8
       sluga: 0.2.1
-    optionalDependencies:
-      next: 16.3.4(@types/node@24.0.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
 
   '@vercel/geistcn-assets@2.0.1(next@16.3.4(@types/node@24.0.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
@@ -3268,7 +3268,7 @@ snapshots:
       '@types/lodash-es': 4.17.12
       '@types/luxon': 3.0.0
       '@types/nprogress': 0.2.0
-      '@vercel/geist-test-utils': 2.0.1(next@16.3.4(@types/node@24.0.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+      '@vercel/geist-test-utils': file:vendor/geist-test-utils
       '@vercel/geistcn-assets': 2.0.1(next@16.3.4(@types/node@24.0.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@vercel/next-themes': 1.0.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@vercel/stega': 1.0.0
