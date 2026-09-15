@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { createSignalDigest } from "./normalize"
 import { redactedSignals } from "./redacted-fixtures"
 import { renderDailyDigest } from "./digest"
+import { createAccountId } from "./stable-id"
 
 const digest = createSignalDigest(
   redactedSignals,
@@ -29,7 +30,31 @@ describe("daily digest rendering", () => {
       text: { type: "plain_text", text: "Daily account signals — 2026-09-14" },
     })
     expect(result.slack.text).toBe(result.text)
-    expect(result.text.length).toBeLessThanOrEqual(4_000)
+    expect(result.text.length).toBeLessThanOrEqual(1_800)
+    expect(result.text).toContain("1. *Harbor Systems*")
+    expect(result.text).not.toContain("2. *Harbor Systems*")
+  })
+
+  it("keeps visible finding numbers contiguous and account-distinct", () => {
+    const signals = redactedSignals.slice(0, 3).map((signal, index) => {
+      const source = { ...signal.source, url: `https://example.test/source-${index}` }
+      return {
+        ...signal,
+        account: { ...signal.account, id: createAccountId(`digest-account-${index}`), name: `Account ${index + 1}` },
+        source,
+        evidence: signal.evidence.map((evidence) => ({ ...evidence, source })),
+      }
+    })
+    const result = renderDailyDigest(createSignalDigest(
+      signals,
+      "2026-09-13T09:00:00.000Z",
+      "2026-09-14T09:00:00.000Z",
+      "2026-09-14T09:00:01.000Z",
+    ))
+    const findingLines = result.text.split("\n").filter((line) => /^\d+\. /.test(line))
+    expect(findingLines.map((line) => line.slice(0, 2))).toEqual(["1.", "2.", "3."])
+    expect(result.text).not.toMatch(/\n4\. /)
+    expect(result.text.length).toBeLessThanOrEqual(1_800)
   })
 
   it("labels partial runs visibly", () => {

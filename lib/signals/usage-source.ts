@@ -33,8 +33,12 @@ export interface UsageMetricClient {
   read(window: UsageReadWindow): Promise<readonly RawUsageMetricRow[]>
 }
 
-export const usageSeriesStatusSchema = z.enum(["stable", "rising", "sparse", "missing"])
+export const usageSeriesStatusSchema = z.enum(["stable", "rising", "sparse", "incomplete", "missing"])
 export type UsageSeriesStatus = z.infer<typeof usageSeriesStatusSchema>
+
+/** Source finality is separate from calendar coverage. A closed calendar window may still be settling. */
+export const usageWindowFinalitySchema = z.enum(["final", "provisional", "unknown"])
+export type UsageWindowFinality = z.infer<typeof usageWindowFinalitySchema>
 
 export const normalizedUsagePointSchema = z
   .object({
@@ -58,8 +62,14 @@ export const normalizedUsageSeriesSchema = z
     previousValue: z.number().finite().nonnegative().nullable(),
     changeRatio: z.number().finite().nullable(),
     points: z.array(normalizedUsagePointSchema),
+    /** Coverage of the current calendar window only; this is not source finality. */
     completeness: z.number().finite().min(0).max(1),
+    currentCompleteness: z.number().finite().min(0).max(1),
+    previousCompleteness: z.number().finite().min(0).max(1),
+    currentFinality: usageWindowFinalitySchema,
+    previousFinality: usageWindowFinalitySchema,
     observedPointCount: z.number().int().nonnegative(),
+    previousObservedPointCount: z.number().int().nonnegative(),
     expectedPointCount: z.number().int().positive(),
     latePointCount: z.number().int().nonnegative(),
     averageLatencyMs: z.number().finite().nonnegative().nullable(),
@@ -93,6 +103,9 @@ export type UsageSourceOptions = {
   expectedIntervalHours?: number
   risingThreshold?: number
   sparseThreshold?: number
+  /** Explicit provider finality. Unknown is conservative and cannot produce a trend label. */
+  currentWindowFinality?: UsageWindowFinality
+  comparisonWindowFinality?: UsageWindowFinality
   /** Restrict ingestion to one provider metric and, when present, one provider grain. */
   metric?: string
   grain?: string
@@ -150,6 +163,20 @@ function periodValue(points: readonly NormalizedUsagePoint[], start: number, end
     return time >= start && time < end
   })
   return values.length === 0 ? null : values.reduce((sum, point) => sum + point.value, 0)
+}
+
+function distinctBucketCount(
+  points: readonly NormalizedUsagePoint[],
+  start: number,
+  end: number,
+  intervalMs: number,
+): number {
+  const buckets = new Set<number>()
+  for (const point of points) {
+    const time = Date.parse(point.observedAt)
+    if (time >= start && time < end) buckets.add(Math.floor((time - start) / intervalMs))
+  }
+  return buckets.size
 }
 
 function latencyMetadata(points: readonly NormalizedUsagePoint[]) {
@@ -235,24 +262,45 @@ export async function ingestUsageMetrics(
     const units = new Set(normalized.map((point) => point.unit))
     if (units.size > 1) throw new Error(`Metric ${metric} for ${accountId} contains incompatible units`)
     const unit = normalized[0]?.unit ?? "unknown"
-    const currentValue = periodValue(normalized, Date.parse(window.startedAt), Date.parse(window.endedAt))
-    const previousValue = periodValue(normalized, Date.parse(comparisonWindow.startedAt), Date.parse(comparisonWindow.endedAt))
-    const inWindow = normalized.filter((point) => Date.parse(point.observedAt) >= Date.parse(window.startedAt) && Date.parse(point.observedAt) < Date.parse(window.endedAt))
-    const completeness = Math.min(1, inWindow.length / expectedPointCount)
-    const changeRatio = currentValue !== null && previousValue !== null
-      ? (previousValue === 0 ? (currentValue === 0 ? 0 : 1) : (currentValue - previousValue) / previousValue)
-      : null
-    const status: UsageSeriesStatus = inWindow.length === 0
+    const windowStart = Date.parse(window.startedAt)
+    const windowEnd = Date.parse(window.endedAt)
+    const comparisonStart = Date.parse(comparisonWindow.startedAt)
+    const comparisonEnd = Date.parse(comparisonWindow.endedAt)
+    const intervalMs = expectedIntervalHours * 3_600_000
+    const currentValue = periodValue(normalized, windowStart, windowEnd)
+    const previousValue = periodValue(normalized, comparisonStart, comparisonEnd)
+    const currentPointCount = distinctBucketCount(normalized, windowStart, windowEnd, intervalMs)
+    const previousPointCount = distinctBucketCount(normalized, comparisonStart, comparisonEnd, intervalMs)
+    const currentCompleteness = Math.min(1, currentPointCount / expectedPointCount)
+    const previousCompleteness = Math.min(1, previousPointCount / expectedPointCount)
+    const currentFinality = options.currentWindowFinality ?? "unknown"
+    const previousFinality = options.comparisonWindowFinality ?? "unknown"
+    const changeRatio = currentValue !== null && previousValue !== null && previousValue > 0
+      ? (currentValue - previousValue) / previousValue
+      : currentValue === 0 && previousValue === 0
+        ? 0
+        : null
+    const comparable = currentCompleteness >= 1 && previousCompleteness >= 1 &&
+      currentFinality === "final" && previousFinality === "final" &&
+      currentValue !== null && previousValue !== null && (previousValue > 0 || currentValue === 0)
+    const status: UsageSeriesStatus = currentPointCount === 0
       ? "missing"
-      : completeness < sparseThreshold
+      : currentCompleteness < sparseThreshold || previousCompleteness < sparseThreshold
         ? "sparse"
-        : changeRatio !== null && changeRatio >= risingThreshold
-          ? "rising"
-          : "stable"
+        : !comparable
+          ? "incomplete"
+          : changeRatio !== null && changeRatio >= risingThreshold
+            ? "rising"
+            : "stable"
     return normalizedUsageSeriesSchema.parse({
       accountId, metric, unit, status, currentValue, previousValue, changeRatio,
-      points: normalized, completeness, observedPointCount: inWindow.length, expectedPointCount,
-      ...latencyMetadata(inWindow),
+      points: normalized, completeness: currentCompleteness, currentCompleteness, previousCompleteness,
+      currentFinality, previousFinality, observedPointCount: currentPointCount,
+      previousObservedPointCount: previousPointCount, expectedPointCount,
+      ...latencyMetadata(normalized.filter((point) => {
+        const time = Date.parse(point.observedAt)
+        return time >= windowStart && time < windowEnd
+      })),
     })
   })
 

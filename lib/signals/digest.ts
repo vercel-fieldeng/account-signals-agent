@@ -8,9 +8,11 @@ import type {
   SignalSeverity,
 } from "./contracts"
 
-export const DAILY_DIGEST_MAX_CHARS = 4_000
-export const SLACK_SECTION_MAX_CHARS = 3_000
+/** Main Slack summaries stay below the evaluation target; extended evidence belongs in a thread. */
+export const DAILY_DIGEST_MAX_CHARS = 1_800
+export const SLACK_SECTION_MAX_CHARS = 1_800
 export const SLACK_MAX_BLOCKS = 50
+export const MAX_DAILY_DIGEST_ACCOUNTS = 3
 
 const severityRank: Record<SignalSeverity, number> = {
   critical: 3,
@@ -165,18 +167,32 @@ function coverageText(input: DailyDigestInput, opportunities: RankedOpportunity[
   return `Account coverage: ${covered}/${total}`
 }
 
-function opportunityLines(opportunity: RankedOpportunity): string[] {
+function opportunityLines(opportunity: RankedOpportunity, displayRank: number): string[] {
   const { signal, evidence } = opportunity
   return [
-    `${opportunity.rank}. *${signal.account.name}* — ${categoryLabel[signal.category]} (${signal.severity})`,
+    `${displayRank}. *${signal.account.name}* — ${categoryLabel[signal.category]} (${signal.severity})`,
     `Why: ${shorten(signal.title, 180)} — ${shorten(signal.detail, 360)}`,
     `Evidence: ${shorten(evidence.summary, 260)}${evidence.excerpt ? ` — “${shorten(evidence.excerpt, 180)}”` : ""}`,
     `Observed: ${dateOnly(signal.observedAt)} · ${sourceText(opportunity.sourceUrl)}`,
   ]
 }
 
-function renderOpportunity(opportunity: RankedOpportunity): string {
-  return opportunityLines(opportunity).join("\n")
+function renderOpportunity(opportunity: RankedOpportunity, displayRank: number): string {
+  return opportunityLines(opportunity, displayRank).join("\n")
+}
+
+/** Keep one primary finding per account so the visible ranking is contiguous and account-distinct. */
+function primaryAccountOpportunities(opportunities: RankedOpportunity[]): RankedOpportunity[] {
+  const seen = new Set<string>()
+  const selected: RankedOpportunity[] = []
+  for (const opportunity of opportunities) {
+    const accountId = opportunity.signal.account.id
+    if (seen.has(accountId)) continue
+    seen.add(accountId)
+    selected.push(opportunity)
+    if (selected.length === MAX_DAILY_DIGEST_ACCOUNTS) break
+  }
+  return selected
 }
 
 function unsupportedSection(count: number): string {
@@ -202,12 +218,15 @@ function boundedText(
     return { text: `${header}\n\nNo new account signals today. Coverage is healthy.`, truncated: false }
   }
 
+  const selected = primaryAccountOpportunities(supported)
+  const omittedSupported = supported.length - selected.length
   const sections: string[] = [header]
   const renderableSections = [
-    ...supported.map(renderOpportunity),
+    ...selected.map((opportunity, index) => renderOpportunity(opportunity, index + 1)),
+    ...(omittedSupported > 0 ? [`Additional evidence omitted from the main summary: ${omittedSupported} signal${omittedSupported === 1 ? "" : "s"}.`] : []),
     ...(unsupportedCount > 0 ? [unsupportedSection(unsupportedCount)] : []),
   ]
-  let truncated = false
+  let truncated = omittedSupported > 0
   for (const section of renderableSections) {
     const candidate = `${sections.join("\n\n")}\n\n${section}`
     if (candidate.length > maxChars) {

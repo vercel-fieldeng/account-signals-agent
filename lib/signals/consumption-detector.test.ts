@@ -41,12 +41,14 @@ function input(overrides: Partial<ConsumptionGrowthInput> = {}): ConsumptionGrow
       end: "2026-09-08T00:00:00.000Z",
       value: 100,
       completeness: 1,
+      complete: true,
     },
     current: {
       start: "2026-09-08T00:00:00.000Z",
       end: "2026-09-15T00:00:00.000Z",
       value: 150,
       completeness: 1,
+      complete: true,
     },
     ...overrides,
   }
@@ -105,6 +107,12 @@ describe("consumption growth detector", () => {
       { lateData: "allow", comparisonWindowMs: 7 * 24 * 60 * 60 * 1000 },
     )
     expect(result.reason).toBe("detected")
+  })
+
+  it("requires explicit finality instead of treating omitted completeness as final", () => {
+    expect(detectConsumptionGrowth(input({
+      previous: { ...input().previous, complete: undefined },
+    })).reason).toBe("incomplete_data")
   })
 
   it("is idempotent when persisted", () => {

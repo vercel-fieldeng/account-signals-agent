@@ -17,6 +17,7 @@ class FixtureClient implements UsageMetricClient {
 const start = "2026-09-08T00:00:00+02:00"
 const end = "2026-09-15T00:00:00+02:00"
 const fixtureRows: RawUsageMetricRow[] = [
+  ...Array.from({ length: 7 }, (_, index) => row("stable", `2026-09-${String(1 + index).padStart(2, "0")}T00:00:00Z`, 10)),
   ...Array.from({ length: 7 }, (_, index) => row("stable", `2026-09-${String(8 + index).padStart(2, "0")}T00:00:00Z`, 10)),
   ...Array.from({ length: 7 }, (_, index) => row("rising", `2026-09-${String(8 + index).padStart(2, "0")}T00:00:00Z`, 20)),
   ...Array.from({ length: 7 }, (_, index) => row("rising", `2026-09-${String(1 + index).padStart(2, "0")}T00:00:00Z`, 10)),
@@ -30,6 +31,7 @@ describe("usage source adapter", () => {
     const result = await ingestUsageMetrics(client, {
       windowStartedAt: start, windowEndedAt: end,
       accountIds: ["missing"], comparisonWindowDays: 90,
+      currentWindowFinality: "final", comparisonWindowFinality: "final",
     })
 
     expect(result.window).toEqual({ startedAt: "2026-09-07T22:00:00.000Z", endedAt: "2026-09-14T22:00:00.000Z" })
@@ -67,5 +69,35 @@ describe("usage source adapter", () => {
     await expect(ingestUsageMetrics(new FixtureClient([row("bad", "not-a-date", 1)]), {
       windowStartedAt: "2026-09-08T00:00:00Z", windowEndedAt: "2026-09-10T00:00:00Z",
     })).rejects.toThrow()
+  })
+
+  it("keeps calendar coverage separate from source finality", async () => {
+    const result = await ingestUsageMetrics(new FixtureClient([
+      ...Array.from({ length: 7 }, (_, index) => row("settling", `2026-09-${String(8 + index).padStart(2, "0")}T00:00:00Z`, 20)),
+      ...Array.from({ length: 7 }, (_, index) => row("settling", `2026-09-${String(1 + index).padStart(2, "0")}T00:00:00Z`, 10)),
+    ]), {
+      windowStartedAt: "2026-09-08T00:00:00Z", windowEndedAt: "2026-09-15T00:00:00Z",
+      currentWindowFinality: "provisional", comparisonWindowFinality: "final",
+    })
+    const series = result.series[0]
+    expect(series).toMatchObject({
+      status: "incomplete", completeness: 1, currentCompleteness: 1, previousCompleteness: 1,
+      currentFinality: "provisional", previousFinality: "final",
+    })
+    expect(series.status).not.toBe("stable")
+    expect(series.status).not.toBe("rising")
+  })
+
+  it("counts daily buckets once and does not turn a zero denominator into a growth ratio", async () => {
+    const result = await ingestUsageMetrics(new FixtureClient([
+      row("zero", "2026-09-08T00:00:00Z", 0),
+      row("zero", "2026-09-08T01:00:00Z", 0),
+      row("zero", "2026-09-09T00:00:00Z", 10),
+    ]), {
+      windowStartedAt: "2026-09-08T00:00:00Z", windowEndedAt: "2026-09-10T00:00:00Z",
+      currentWindowFinality: "final", comparisonWindowFinality: "final",
+    })
+    expect(result.series[0]).toMatchObject({ observedPointCount: 2, previousValue: null, changeRatio: null })
+    expect(result.series[0].status).not.toBe("rising")
   })
 })

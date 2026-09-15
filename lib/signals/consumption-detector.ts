@@ -15,7 +15,7 @@ export type ConsumptionWindow = {
   value: number
   /** 0..1 coverage of the expected periods in this window. */
   completeness: number
-  /** Explicitly false means the source says the window is not final. */
+  /** Only explicit true is final; false or omitted means source finality is not verified. */
   complete?: boolean
   receivedAt?: string
   /** The source reported values after the window was closed. */
@@ -125,7 +125,7 @@ function windowEvidence(
       value: window.value,
       unit: input.unit,
       completeness: window.completeness,
-      complete: window.complete ?? true,
+      complete: window.complete === true,
       late: window.late ?? false,
     },
   }
@@ -158,7 +158,7 @@ export function detectConsumptionGrowth(
   }
   if (input.previous.completeness < config.minimumCompleteness ||
       input.current.completeness < config.minimumCompleteness ||
-      input.previous.complete === false || input.current.complete === false) {
+      input.previous.complete !== true || input.current.complete !== true) {
     return { signal: null, reason: "incomplete_data" }
   }
   if (config.lateData === "reject" && (input.previous.late === true || input.current.late === true)) {
