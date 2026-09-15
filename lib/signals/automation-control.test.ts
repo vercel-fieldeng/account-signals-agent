@@ -45,6 +45,17 @@ describe("automation controls", () => {
     await expect(handleAutomationControl("setup automation now", auth(), ts, store, "production")).resolves.toBeNull()
   })
 
+  it("recovers only through the exact operator control", async () => {
+    const recovered = state({ job: { id: "job", dueAt: "2023-11-14T22:18:20.000Z", status: "failed", acceptedSessionId: "session", terminalAt: "2023-11-14T22:30:20.000Z", failureCode: "session_stale" } })
+    const reconcileStaleDispatch = vi.fn(async () => ({ reconciled: true, state: recovered }))
+    const store = { read: vi.fn(async () => recovered), pause: vi.fn(async () => recovered), reconcileStaleDispatch }
+    await expect(handleAutomationControl("recover automation", auth(), ts, store, "production")).resolves.toEqual({
+      kind: "reply",
+      text: expect.stringContaining("marked failed"),
+    })
+    expect(reconcileStaleDispatch).toHaveBeenCalledWith(expect.objectContaining({ channelId: AUTOMATION_CHANNEL_ID }))
+  })
+
   it("returns null for normal text without touching storage", async () => {
     const store = { read: vi.fn(async () => null), pause: vi.fn() }
     await expect(handleAutomationControl("hello", auth(), ts, store, "production")).resolves.toBeNull()

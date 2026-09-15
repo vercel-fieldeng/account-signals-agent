@@ -48,6 +48,7 @@ These exact mentions are handled deterministically, without a model turn:
 ```text
 @account-signals-slack automation status
 @account-signals-slack pause automation
+@account-signals-slack recover automation
 ```
 
 Controls require the same authenticated operator and production channel. Pause cancels pending setup and scheduled/checking jobs. Once dispatch is committed, the external handoff may still start; an accepted run is not cancelled and provider credentials are not revoked. Do not describe pause as stronger cancellation than this boundary.

@@ -15,13 +15,14 @@ export type AutomationOwner = {
   installationTeamId: string
 }
 
-export type AutomationCommand = "setup" | "status" | "pause" | null
+export type AutomationCommand = "setup" | "status" | "pause" | "recover" | null
 
 export function classifyAutomationCommand(text: string): AutomationCommand {
   const command = text.replace(/^<@[A-Z0-9]+(?:\|[^>]+)?>\s*/i, "").trim().toLowerCase()
   if (command === "setup automation") return "setup"
   if (command === "automation status") return "status"
   if (command === "pause automation") return "pause"
+  if (command === "recover automation") return "recover"
   return null
 }
 

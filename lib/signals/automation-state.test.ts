@@ -238,6 +238,23 @@ describe("AutomationStateStore", () => {
     expect((await dueStore.read())?.job?.terminalAt).toBeTypeOf("string")
   })
 
+  it("marks an old dispatched session stale without touching a recent dispatch", async () => {
+    const state = fixture()
+    await ready(store(state))
+    const dueStore = store(state, new Date(baseTime.getTime() + 6 * 60_000))
+    const claim = await dueStore.claimDue()
+    await dueStore.authorizeDispatch(claim!)
+    await dueStore.markDispatched(claim!, "session-stale")
+
+    const recent = await store(state, new Date(baseTime.getTime() + 6 * 60_000)).reconcileStaleDispatch(owner)
+    expect(recent.reconciled).toBe(false)
+    expect((await store(state).read())?.job?.status).toBe("dispatched")
+
+    const recovered = await store(state, new Date(baseTime.getTime() + 30 * 60_000)).reconcileStaleDispatch(owner)
+    expect(recovered.reconciled).toBe(true)
+    expect(recovered.state?.job).toMatchObject({ status: "failed", failureCode: "session_stale", acceptedSessionId: "session-stale" })
+  })
+
   it("arms an immediate trigger after a terminal job and enforces active/cooldown guards", async () => {
     const state = fixture()
     await ready(store(state))

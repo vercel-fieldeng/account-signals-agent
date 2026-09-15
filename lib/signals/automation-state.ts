@@ -398,6 +398,34 @@ export class AutomationStateStore {
     })
   }
 
+  /** Marks a dispatched session stale only after it has exceeded the recovery age. */
+  async reconcileStaleDispatch(ownerInput: AutomationOwner, maxAgeMs = FIFTEEN_MINUTES): Promise<{ reconciled: boolean; state: AutomationState | null }> {
+    if (!Number.isSafeInteger(maxAgeMs) || maxAgeMs < FIFTEEN_MINUTES) fail("Invalid stale recovery age")
+    const owner = this.owner(ownerInput)
+    return this.mutate<{ reconciled: boolean; state: AutomationState | null }>((current) => {
+      if (!current) return { state: current, result: { reconciled: false, state: current } }
+      if (!sameOwner(current.owner, owner)) fail("Automation owner mismatch")
+      const job = current.job
+      if (!job || job.status !== "dispatched" || !job.acceptedSessionId) {
+        return { state: current, result: { reconciled: false, state: current } }
+      }
+      const age = this.clock().getTime() - Date.parse(current.updatedAt)
+      if (!Number.isFinite(age) || age < maxAgeMs) {
+        return { state: current, result: { reconciled: false, state: current } }
+      }
+      const terminalAt = this.clock().toISOString()
+      const nextJob: AutomationJob = {
+        ...job,
+        status: "failed",
+        terminalAt,
+        failureCode: "session_stale",
+        claimToken: undefined,
+      }
+      const state = { ...current, job: nextJob, updatedAt: terminalAt }
+      return { state, result: { reconciled: true, state } }
+    })
+  }
+
   async block(claim: ClaimedAutomationJob, code: string): Promise<void> {
     if (!/^[a-z0-9][a-z0-9_:-]{0,63}$/.test(code)) fail("Invalid automation block code")
     await this.mutate<void>((current) => {

@@ -2,10 +2,17 @@ import { defineHook } from "eve/hooks"
 import { AutomationStateStore } from "../../lib/signals/automation-state"
 
 /**
- * Reconciles an accepted native diagnostic when Eve has durably observed its
- * final assistant message or terminal session event. This is intentionally
- * idempotent and matches only the persisted session ID; ordinary Slack turns
- * are ignored by the state store.
+ * Eve emits message.completed for interim assistant text before tool calls and
+ * for the final answer. Only the latter may reconcile this one-shot job.
+ */
+export function isTerminalDiagnosticMessage(finishReason: string | undefined): boolean {
+  return finishReason !== "tool-calls"
+}
+
+/**
+ * Reconciles an accepted native diagnostic after its final answer or terminal
+ * session event. This is intentionally idempotent and matches only the
+ * persisted session ID; ordinary Slack turns are ignored by the state store.
  */
 async function reconcile(sessionId: string, outcome: "completed" | "failed", failureCode?: string) {
   try {
@@ -19,8 +26,12 @@ async function reconcile(sessionId: string, outcome: "completed" | "failed", fai
 
 export default defineHook({
   events: {
-    // A message can complete before a tool call or later turn. Only the
-    // terminal session event may reconcile the durable automation job.
+    // Interactive Slack sessions enter waiting after a final answer rather than
+    // emitting session.completed, so reconcile the final message as well.
+    "message.completed": async (event, ctx) => {
+      if (!isTerminalDiagnosticMessage(event.data.finishReason)) return
+      await reconcile(ctx.session.id, "completed")
+    },
     "session.completed": async (_event, ctx) => {
       await reconcile(ctx.session.id, "completed")
     },

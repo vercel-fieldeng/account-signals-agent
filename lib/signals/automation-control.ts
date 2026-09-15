@@ -2,7 +2,7 @@ import type { SessionAuthContext } from "eve/context"
 import { automationOwnerFromAuth, automationSetupAuth, classifyAutomationCommand, slackTimestampToIso } from "./automation-policy"
 import { AutomationStateStore, type AutomationState } from "./automation-state"
 
-type ControlStore = Pick<AutomationStateStore, "read" | "pause">
+type ControlStore = Pick<AutomationStateStore, "read" | "pause"> & Partial<Pick<AutomationStateStore, "reconcileStaleDispatch">>
 export type AutomationControlResult =
   | { kind: "setup"; auth: SessionAuthContext; context: readonly string[] }
   | { kind: "reply"; text: string }
@@ -17,7 +17,7 @@ export function automationStatusText(state: AutomationState | null): string {
   if (job.status === "scheduled") return `One native diagnostic is scheduled for ${job.dueAt} (UTC). Source retrieval is not yet verified.`
   if (job.status === "checking") return "The native scheduler is validating the saved owner’s grants before starting the diagnostic."
   if (job.status === "dispatching") return "Diagnostic dispatch was claimed. Its acceptance is not yet recorded; do not retry blindly."
-  if (job.status === "dispatched") return "The native scheduler accepted the diagnostic session, but its terminal result is not reconciled yet. Do not retry blindly; dispatch alone does not prove source retrieval or delivery."
+  if (job.status === "dispatched") return "The native scheduler accepted the diagnostic session, but its terminal result is not reconciled yet. Do not retry blindly; dispatch alone does not prove source retrieval or delivery. If this remains unchanged for at least 15 minutes, the authorized operator may send `recover automation` to mark the stale handoff failed."
   if (job.status === "completed") return `The diagnostic completed at ${job.terminalAt ?? "an unrecorded time"}. Check its channel result; completion does not change the partial-scope limitations.`
   if (job.status === "failed") return `The diagnostic reached a terminal failure (${job.failureCode ?? "unknown"}). No automatic retry is armed; inspect the run before sending a new setup request.`
   if (job.status === "blocked") return `The diagnostic is blocked (${job.failureCode ?? "unknown"}). No automatic retry is armed. Send ‘setup automation’ to repair authorization and schedule one new test.`
@@ -46,6 +46,16 @@ export async function handleAutomationControl(
   if (command === "pause") {
     const state = await store.pause(owner, slackTimestampToIso(messageTs))
     return { kind: "reply", text: automationStatusText(state) }
+  }
+  if (command === "recover") {
+    if (!store.reconcileStaleDispatch) throw new Error("Automation recovery is unavailable")
+    const result = await store.reconcileStaleDispatch(owner)
+    return {
+      kind: "reply",
+      text: result.reconciled
+        ? "The stale dispatched diagnostic was marked failed. No automatic retry was started; send `setup automation` when you are ready to schedule a new run."
+        : automationStatusText(result.state),
+    }
   }
   return { kind: "reply", text: automationStatusText(await store.read()) }
 }
