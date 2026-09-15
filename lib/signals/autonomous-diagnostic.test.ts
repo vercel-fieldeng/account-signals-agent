@@ -207,6 +207,7 @@ describe("owner-bound autonomous diagnostic", () => {
     expect(prompt).toContain("Do not call a consumption spike “product adoption”")
     expect(prompt).toContain("collect_external_signals")
     expect(prompt).toContain("baselineAvailable: false")
+    expect(prompt).toContain("No signal brief yet—retrieval is still processing; no outreach recommendation is available.")
     expect(prompt).toContain("compact `Coverage` note")
     expect(prompt).toContain("row/result truncation")
     expect(prompt).toContain("Never collapse returned signals to counts or account names only")
