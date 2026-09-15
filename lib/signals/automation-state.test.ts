@@ -238,6 +238,23 @@ describe("AutomationStateStore", () => {
     expect((await dueStore.read())?.job?.terminalAt).toBeTypeOf("string")
   })
 
+  it("arms an immediate trigger after a terminal job and enforces active/cooldown guards", async () => {
+    const state = fixture()
+    await ready(store(state))
+    await expect(store(state).armImmediate("web-active")).rejects.toThrow("busy")
+
+    const dueStore = store(state, new Date(baseTime.getTime() + 6 * 60_000))
+    const claim = await dueStore.claimDue()
+    await dueStore.authorizeDispatch(claim!)
+    await dueStore.markDispatched(claim!, "session-trigger")
+    await dueStore.reconcileSession("session-trigger", "completed")
+
+    await expect(store(state, new Date(baseTime.getTime() + 9 * 60_000)).armImmediate("web-cooldown"))
+      .rejects.toThrow("cooldown")
+    const armed = await store(state, new Date(baseTime.getTime() + 12 * 60_000)).armImmediate("web-ready")
+    expect(armed).toMatchObject({ status: "scheduled", dueAt: at(12) })
+  })
+
   it("records a terminal failure without accepting an arbitrary failure code", async () => {
     const state = fixture()
     await ready(store(state))

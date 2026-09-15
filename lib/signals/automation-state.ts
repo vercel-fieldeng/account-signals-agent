@@ -261,6 +261,40 @@ export class AutomationStateStore {
     })
   }
 
+  /** Arms one immediate, owner-bound diagnostic for a trusted internal trigger. */
+  async armImmediate(requestId: string): Promise<AutomationJob> {
+    if (typeof requestId !== "string" || requestId.length === 0 || requestId.length > 256) {
+      fail("Invalid automation trigger request")
+    }
+
+    return this.mutate((current) => {
+      if (!current || current.paused || current.setup.status !== "ready") {
+        fail("Automation is not ready")
+      }
+      if (current.job && ["scheduled", "checking", "dispatching", "dispatched"].includes(current.job.status)) {
+        fail("Automation trigger is busy")
+      }
+      if (current.job?.terminalAt && this.clock().getTime() - Date.parse(current.job.terminalAt) < FIVE_MINUTES) {
+        fail("Automation trigger cooldown is active")
+      }
+
+      const now = this.clock().toISOString()
+      const job: AutomationJob = { id: jobId(requestId), dueAt: now, status: "scheduled" }
+      return {
+        state: {
+          ...current,
+          paused: false,
+          generation: current.generation + 1,
+          updatedAt: now,
+          lastIntentAt: now,
+          setup: { ...current.setup, status: "ready" },
+          job,
+        },
+        result: job,
+      }
+    })
+  }
+
   async pause(ownerInput: AutomationOwner, requestedAt: string): Promise<AutomationState> {
     const owner = this.owner(ownerInput)
     this.validateIntent(requestedAt, false)

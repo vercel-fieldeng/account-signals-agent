@@ -55,4 +55,17 @@ Local unit tests supplement this loop. They cannot establish deployed source acc
 
 ## Current test status
 
-The initial five-account Eve test request has been prepared as a Slack draft. At the time this document was added, a human-authenticated request and Eve-generated result were still pending. No runtime quality score has been assigned yet.
+The initial native five-account diagnostic was observed in the target Slack channel on 2026-09-15 UTC (Slack message timestamp `1789460245.207609`). Source authorization, exact account verification, and d0 retrieval completed, but the report exposed four quality defects: duplicate visible finding ranks, “product adoption” language for a consumption spike, a stable/declining interpretation while the final day was still settling, and no per-finding AE/SA route or concrete deep-dive owner.
+
+The deployed improvement changes the system instructions, native diagnostic prompt, and Slack delivery contract to require:
+
+- one bounded context pass after candidate detection;
+- dated, attributable hypotheses classified as explained/expected, actionable, watch, or insufficient evidence;
+- actionable-only human routing;
+- BLUF as the top-level Slack message and evidence/hypotheses/limitations in one thread reply;
+- one contiguous rank sequence across at most three distinct accounts;
+- consumption/adoption separation and finality-safe trend language.
+
+A post-change native run was observed at Slack message timestamp `1789463759.871959`. It corrected the four baseline defects: ranks were contiguous and account-distinct, consumption was not labelled adoption, provisional data was not labelled stable/declining, and every finding had verified routing plus a deep-dive action. That run still omitted exact comparison-window lines and compact per-finding evidence/source references. The current iteration addresses those omissions and adds event-day contextual investigation plus BLUF/thread delivery.
+
+The current build is deployed to the production project and its Eve health endpoint is `READY`. Local verification is complete: 32 test files passed, 196 tests passed, 1 live Blob test was skipped, TypeScript passed, and Eve build passed with the existing non-blocking `agent/delivery/` discovery warning. A fresh native run was observed at Slack message timestamp `1789465022.515949`: Nintendo was classified high-confidence explained/expected from dated first-party Nintendo Direct events and suppressed; all other changes remained watch-only because data was provisional; the BLUF was posted at the root and one concise context/evidence reply was posted in its thread. The latest deployed iteration now adds explicit project/domain/current-footprint/commercial-motion context instructions and deterministic Slack Block Kit layout; those changes await the next live run for runtime scoring.

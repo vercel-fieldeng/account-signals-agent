@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import { Badge } from '@vercel/geistcn/components/badge';
 import { LogoVercel } from '@vercel/geistcn-assets/logos';
 import { Card } from '@/components/ui/card';
+import { DiagnosticTrigger } from '@/components/diagnostic-trigger';
 
 const slackChannelUrl =
   'https://vercel.enterprise.slack.com/archives/C0C1GJNPV0V';
@@ -71,6 +72,21 @@ export default function Page(): JSX.Element {
               #C0C1GJNPV0V
             </span>
           </div>
+        </section>
+
+        <section aria-labelledby="diagnostic-heading">
+          <Card className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex max-w-2xl flex-col gap-2">
+              <p className="text-label-13 text-gray-700">PRODUCTION RUN</p>
+              <h2 id="diagnostic-heading" className="text-heading-24">
+                Run the 15-account diagnostic
+              </h2>
+              <p className="text-copy-14 text-gray-800">
+                Starts one read-only Eve run for the allowlisted Account Signals channel. The result is delivered as a BLUF with detail in a Slack thread.
+              </p>
+            </div>
+            <DiagnosticTrigger />
+          </Card>
         </section>
 
         <section aria-labelledby="connection-heading" className="flex flex-col gap-6">

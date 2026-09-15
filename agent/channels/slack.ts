@@ -9,6 +9,10 @@ import {
 } from '../../lib/signals/slack-commands';
 import { AutomationAdmissionError, classifyAutomationCommand } from '../../lib/signals/automation-policy';
 import { handleAutomationControl } from '../../lib/signals/automation-control';
+import {
+  diagnosticSlackPost,
+  splitDiagnosticMessage,
+} from '../../lib/signals/autonomous-diagnostic-output';
 
 export default slackChannel({
   credentials: connectSlackCredentials('slack/account-signals-slack'),
@@ -46,5 +50,23 @@ export default slackChannel({
   },
   onDirectMessage() {
     return null;
+  },
+  events: {
+    // Scheduled diagnostics return a two-part envelope. Keep the root message
+    // glancable and put evidence/hypotheses/limitations in one reply.
+    async 'message.completed'(event, ctx) {
+      if (event.finishReason === 'tool-calls') return;
+      if (!event.message) {
+        await ctx.thread.startTyping();
+        return;
+      }
+      const parts = splitDiagnosticMessage(event.message);
+      if (!parts) {
+        await ctx.thread.post(event.message);
+        return;
+      }
+      await ctx.thread.post(diagnosticSlackPost(parts.bluf));
+      await ctx.thread.post(diagnosticSlackPost(parts.detail));
+    },
   },
 });
