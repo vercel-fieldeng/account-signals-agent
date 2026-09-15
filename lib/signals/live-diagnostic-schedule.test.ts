@@ -59,7 +59,11 @@ describe("native owner-bound diagnostic schedule", () => {
     resolve()
     await running
     await expect(waits[0]).resolves.toMatchObject({ id: "session-1" })
-    expect(to).toHaveBeenCalledWith(channel, { channelId: AUTOMATION_CHANNEL_ID, installationTeamId: AUTOMATION_WORKSPACE_ID })
+    expect(to).toHaveBeenCalledWith(channel, expect.objectContaining({
+      channelId: AUTOMATION_CHANNEL_ID,
+      installationTeamId: AUTOMATION_WORKSPACE_ID,
+      initialMessage: expect.objectContaining({ fallbackText: expect.stringContaining("Account Signals — running") }),
+    }))
     expect(send).toHaveBeenCalledWith("diagnostic prompt", { auth: owner.auth })
   })
 

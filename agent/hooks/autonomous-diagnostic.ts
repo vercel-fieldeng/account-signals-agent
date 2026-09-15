@@ -19,9 +19,8 @@ async function reconcile(sessionId: string, outcome: "completed" | "failed", fai
 
 export default defineHook({
   events: {
-    "message.completed": async (_event, ctx) => {
-      await reconcile(ctx.session.id, "completed")
-    },
+    // A message can complete before a tool call or later turn. Only the
+    // terminal session event may reconcile the durable automation job.
     "session.completed": async (_event, ctx) => {
       await reconcile(ctx.session.id, "completed")
     },

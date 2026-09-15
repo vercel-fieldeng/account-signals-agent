@@ -2,6 +2,7 @@ import { connectSlackCredentials } from '@vercel/connect/eve';
 import {
   defaultSlackAuth,
   slackChannel,
+  type SlackEventContext,
 } from 'eve/channels/slack';
 import {
   isAllowedSlackChannel,
@@ -13,6 +14,28 @@ import {
   diagnosticSlackPost,
   splitDiagnosticMessage,
 } from '../../lib/signals/autonomous-diagnostic-output';
+
+async function updateDiagnosticRoot(ctx: SlackEventContext, post: ReturnType<typeof diagnosticSlackPost>): Promise<boolean> {
+  try {
+    await ctx.thread.refresh();
+    const root = ctx.thread.recentMessages.find((message) => message.ts === ctx.slack.threadTs);
+    if (!root?.isMe) return false;
+    const response = await ctx.slack.request('chat.update', {
+      channel: ctx.slack.channelId,
+      ts: ctx.slack.threadTs,
+      text: post.text,
+      blocks: post.blocks,
+    });
+    if (!response.ok) {
+      console.warn('diagnostic_root_update_failed');
+      return false;
+    }
+    return true;
+  } catch {
+    console.warn('diagnostic_root_update_failed');
+    return false;
+  }
+}
 
 export default slackChannel({
   credentials: connectSlackCredentials('slack/account-signals-slack'),
@@ -65,7 +88,8 @@ export default slackChannel({
         await ctx.thread.post(event.message);
         return;
       }
-      await ctx.thread.post(diagnosticSlackPost(parts.bluf));
+      const rootUpdated = await updateDiagnosticRoot(ctx, diagnosticSlackPost(parts.bluf));
+      if (!rootUpdated) await ctx.thread.post(diagnosticSlackPost(parts.bluf));
       await ctx.thread.post(diagnosticSlackPost(parts.detail));
     },
   },
