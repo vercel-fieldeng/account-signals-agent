@@ -19,7 +19,9 @@ async function updateDiagnosticRoot(ctx: SlackEventContext, post: ReturnType<typ
   try {
     await ctx.thread.refresh();
     const root = ctx.thread.recentMessages.find((message) => message.ts === ctx.slack.threadTs);
-    if (!root?.isMe) return false;
+    // Session-rehydrated Slack bindings intentionally cannot reliably classify
+    // messages with `isMe`; validate the bound message is the thread root instead.
+    if (!root || root.threadTs !== root.ts) return false;
     const response = await ctx.slack.request('chat.update', {
       channel: ctx.slack.channelId,
       ts: ctx.slack.threadTs,
