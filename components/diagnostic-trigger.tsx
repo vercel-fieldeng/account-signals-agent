@@ -40,7 +40,7 @@ export function DiagnosticTrigger(): JSX.Element {
   }
 
   const status = state.kind === 'running'
-    ? 'Starting the 15-account Eve diagnostic…'
+    ? 'Starting the full-account Eve diagnostic…'
     : state.kind === 'accepted'
       ? 'Accepted. Watch the Slack channel for the BLUF and thread detail.'
       : state.kind === 'error'

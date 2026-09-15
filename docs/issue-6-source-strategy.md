@@ -79,6 +79,19 @@ Source selection is ordered: public ATS feed or public job detail, then the comp
 
 These outcomes map to the existing run statuses `succeeded`, `partial`, and `failed`; they do not require changes to the contracts. A successful run may contain no signals only when the approved source was fetched successfully and the bounded window genuinely contained no qualifying records.
 
+## Live runtime integration
+
+The live autonomous diagnostic invokes the bounded `collect_external_signals` Eve tool after Salesforce roster verification. The tool calls the careers and company-news collectors in-process; it does not grant the model unrestricted web fetching and it never uses authenticated LinkedIn.
+
+Production requires these deployment settings:
+
+- `EXTERNAL_SOURCES_ENABLED=1` — enables public-source collection.
+- `EXTERNAL_SOURCE_TERMS_APPROVED=1` — records that the deployment has completed the required terms/legal review for the configured public-source policy. Robots checks are still enforced per host.
+- `EXA_API_KEY` — required for account-scoped company-news discovery; careers/ATS collection does not require this key.
+- A private Vercel Blob store, using the existing `BLOB_STORE_ID` binding when applicable, for the careers baseline cache at `account-signals/private/external-source-cache-v1.json`.
+
+If any required setting is missing, the tool returns explicit `unavailable`/`partial` coverage in the diagnostic rather than treating the source as empty. The careers cache is used to distinguish later additions from first-observed postings; cache read/write failures are surfaced as limitations and do not erase fetched source results.
+
 ## Assumptions
 
 - Legal/privacy and security review has approved public first-party collection under the controls above; this document does not grant that approval.
