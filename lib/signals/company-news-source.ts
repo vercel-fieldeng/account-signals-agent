@@ -28,6 +28,7 @@ export interface CompanyNewsClient {
 }
 
 export type CompanyNewsFetchResult = {
+  /** Public first-party source scope; discovery-provider endpoints are not evidence URLs. */
   sourceUrl: string
   items: readonly unknown[]
   nextCursor?: string | null

@@ -103,10 +103,10 @@ The current news detector uses a deterministic checked-in taxonomy, marks fetche
 
 The source strategy in `docs/issue-6-source-strategy.md` is the governing boundary:
 
-- Prefer public, first-party company careers/news pages and company-authorized public ATS feeds. Public sitemaps/RSS may discover URLs; the linked first-party article or job record is the evidence.
-- Check and honor `robots.txt`, published website/API/feed terms, provider limits, and `Retry-After`. Robots permission does not override terms, law, authentication, or an explicit prohibition.
+- Prefer public, first-party company careers/news pages and company-authorized public ATS feeds. Public sitemaps/RSS and account-scoped Exa searches may discover URLs; the linked first-party article or job record is the evidence.
+- Check and honor `robots.txt`, published website/API/feed/provider terms, provider limits, and `Retry-After`. Robots permission does not override terms, law, authentication, or an explicit prohibition.
 - Use a descriptive user agent where permitted; do not rotate identities, bypass CAPTCHA, evade rate limits, authenticate to scrape, or reuse personal sessions.
-- Do not use job aggregators, search snippets, employee-submitted listings, scraped social profiles, or authenticated LinkedIn as primary evidence. `linkedin_api` remains disabled until separate legal/privacy review, product approval, and an approved API/commercial access path exist.
+- Do not use job aggregators, search snippets, employee-submitted listings, scraped social profiles, or authenticated LinkedIn as primary evidence. Exa snippets, summaries, and ranking metadata are discovery data only; `linkedin_api` remains disabled until separate legal/privacy review, product approval, and an approved API/commercial access path exist.
 - Poll no more frequently than the documented six-hour source cadence, use bounded windows (maximum 30-day initial backfill in the source strategy), and do not turn a failed or partial fetch into an empty result.
 - Preserve source system, stable record ID/canonical URL, observation time, collection time, and a short attributable excerpt. A signal must not imply company endorsement.
 - Quarantine malformed or unverifiable content; do not emit evidence for it.

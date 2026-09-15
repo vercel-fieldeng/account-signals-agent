@@ -9,7 +9,7 @@ This is **not a generic account briefing**. The required signal families are:
 1. Material changes in consumption, with comparable complete periods, units, baseline values, and source freshness.
 2. Changes in Vercel product adoption, verified through the appropriate usage/configuration evidence. Do not substitute project creation, billing line-item appearance, entitlement, or missing records for adoption.
 3. New or materially changed Tech/IT job postings, with source links; suppress removals/reposts as new-hiring alerts.
-4. New, attributable, potentially Vercel-relevant LinkedIn posts. Use an approved API/provider or public indexing source with stated coverage limits; do not scrape authenticated LinkedIn pages or silently substitute company news for LinkedIn coverage.
+4. New, attributable, potentially Vercel-relevant public-web news discovered through Exa. Scope searches to the account’s public domains and bounded publication windows; validate the canonical first-party page before emitting a company-news signal. Do not treat Exa snippets or search metadata as evidence.
 
 The first successful observation establishes a baseline rather than announcing historical records as new. Source failures must leave the last successful baseline intact. Missing coverage is not zero usage or a healthy no-change day. Repeated observations and delivery retries must not create repeated alerts.
 
@@ -36,7 +36,7 @@ Retention is currently count-bounded; time-based retention/deletion and account 
 - [ ] Resolve the authoritative SA/AE roster and all verified account-to-team mappings.
 - [ ] Integrate actual consumption and product-adoption inputs with deterministic comparisons; schema/query leads in older source documents are not verified production contracts.
 - [ ] Configure approved careers/ATS endpoints and collection-policy enforcement per account.
-- [ ] Select and validate the LinkedIn source, attribution, and coverage limitations.
+- [ ] Configure and validate Exa search credentials, account-domain scoping, attribution, and coverage limitations.
 - [ ] Connect live collectors and detectors to Blob-backed state and a durable delivery ledger.
 - [ ] Implement time-based retention and deletion of linked records.
 - [ ] Register the DST-correct 08:00 schedule, verify it in Vercel, and run a real end-to-end baseline/delta/retry test before enabling unattended delivery.

@@ -28,19 +28,20 @@ For each account, the acceptance test is a public `careersUrl` that returns a co
 ## Approved company-post/news strategy
 
 1. Prefer the company’s own public newsroom, blog, press-release, engineering blog, or investor/company updates page. Represent the resulting records as `company_news`; use `company_article` for an article and `company_post` for a first-party post format.
-2. Use a public company sitemap, RSS/Atom feed, or linked archive (`sitemap`) only to discover or enumerate first-party URLs. The sitemap itself is not the evidence of a company announcement; the linked public article/post is. The emitted source reference should point to the article/post when available.
+2. Use a public company sitemap, RSS/Atom feed, linked archive (`sitemap`), or Exa search only to discover or enumerate first-party URLs. The discovery provider is not the evidence of a company announcement; the linked public article/post is. The emitted source reference should point to the article/post when available.
 3. Emit an `it_company_news` signal only when a first-party post contains a material IT, infrastructure, platform, security, engineering, or technology-business change. Capture the canonical URL, author/publisher if public, publication time if public, title, and a short attributable excerpt. Do not convert ordinary marketing, reposts, or third-party coverage into company-news evidence.
-4. A public company post mirrored on a third-party platform is not an approved primary source unless the company’s own page links to or identifies that mirror as its official publication. Do not use LinkedIn posts as an active source under this strategy.
+4. Exa requests must be scoped to the account’s public domains and the run’s publication window. Exa snippets, summaries, ranking scores, and search metadata are discovery data only; they must not independently produce a signal or be stored as evidence.
+5. A public company post mirrored on a third-party platform is not an approved primary source unless the company’s own page links to or identifies that mirror as its official publication. Do not use LinkedIn posts as an active source under this strategy.
 
 ### Testable source for the company-news family
 
-For each account, the acceptance test is a public first-party news/article URL, discovered directly or through a permitted public sitemap/feed, that can be fetched and parsed into a `company_news` source reference with `company_article` or `company_post` evidence. The test should verify that the stored URL is canonical when a canonical link exists, the excerpt is traceable to the page, and a re-fetch deduplicates the same source record. If no qualifying first-party article/post is available, produce no news signal and record unsupported/partial status as applicable.
+For each account, the acceptance test is a public first-party news/article URL, discovered directly or through a permitted public sitemap/feed or account-scoped Exa search, that can be fetched and parsed into a `company_news` source reference with `company_article` or `company_post` evidence. The test should verify that the stored URL is canonical when a canonical link exists, the excerpt is traceable to the page, and a re-fetch deduplicates the same source record. If no qualifying first-party article/post is available, produce no news signal and record unsupported/partial status as applicable.
 
-## Explicit LinkedIn exclusion and approval gate
+## Search-provider and LinkedIn policy
 
 Authenticated LinkedIn scraping is explicitly out of scope. Do not log in, reuse a user session, automate a browser against an authenticated LinkedIn page, bypass access controls, or collect LinkedIn content with cookies or personal credentials. The account’s `linkedinCompanyUrl` is metadata/discovery context only and must not be used as evidence by the active collectors.
 
-The `linkedin_api` source system is a future, disabled-by-default option. It may be enabled only after documented legal/privacy review, written product approval, and an approved LinkedIn API/commercial access path with credentials handled by the deployment environment. Until all three approvals exist, LinkedIn absence is unsupported coverage, never a reason to scrape or downgrade source provenance.
+The `linkedin_api` source system remains a future, disabled-by-default option and is not part of the active news path. Exa is the active search provider for public-web discovery, with API credentials handled by the deployment environment. Exa search output is not a source system in the shared contract: only a validated canonical first-party article/post may produce `company_news` evidence. Exa terms, retention, rate limits, and any account-data sharing requirements must be reviewed before unattended production collection.
 
 ## Collection controls
 
@@ -50,7 +51,7 @@ The `linkedin_api` source system is a future, disabled-by-default option. It may
 - Follow the site’s published terms, API terms, and feed usage guidance. Stop on an explicit prohibition or access-control challenge and record the source error.
 - Use a descriptive user agent with an operational contact where permitted. Do not rotate identities to evade limits.
 - Honor `Retry-After` and documented provider limits. Otherwise use at most one request per host per 15 minutes during normal polling, with exponential backoff for `429`, `5xx`, timeouts, and connection failures. Do not retry `401`, `403`, CAPTCHA, or robots denial automatically.
-- Bound each run to the account’s configured public URLs plus explicitly linked first-party paths. Do not perform broad crawling or search-engine scraping.
+- Bound each run to the account’s configured public URLs plus explicitly linked first-party paths. Exa discovery requests must include the account’s domains and bounded publication dates; do not perform broad crawling or uncontrolled search.
 
 ### Fetch cadence and windows
 
@@ -68,7 +69,7 @@ The `linkedin_api` source system is a future, disabled-by-default option. It may
 
 ## Fallback, unsupported, and error behavior
 
-Source selection is ordered: public ATS feed or public job detail, then the company careers page; for news, the first-party article/post, discovered through its own page or public sitemap/feed. Fallback must remain first-party/public and must not silently switch to an aggregator or LinkedIn.
+Source selection is ordered: public ATS feed or public job detail, then the company careers page; for news, the first-party article/post, discovered through its own page, public sitemap/feed, or account-scoped Exa search. Fallback must remain first-party/public and must not silently switch to an aggregator or LinkedIn.
 
 - **Unsupported:** no public approved endpoint exists, the page requires authentication, robots/terms prohibit collection, or the source cannot provide a stable attributable record. Emit no signal. Record the source as unsupported with the reason in the run’s error/reporting layer.
 - **Partial:** at least one approved source was collected but another configured source failed, was rate-limited, or was unavailable. Emit only validated records and mark the run `partial` with a retryable error where appropriate. Never turn the missing portion into zero results.
@@ -82,4 +83,4 @@ These outcomes map to the existing run statuses `succeeded`, `partial`, and `fai
 
 - Legal/privacy and security review has approved public first-party collection under the controls above; this document does not grant that approval.
 - The runtime can enforce per-host cadence, robots checks, bounded windows, retention deletion, and source attribution. If it cannot, the source is unsupported until those controls exist.
-- The current contract’s `sitemap` value is used for discovery metadata, while `company_news` remains the source of company-post/news evidence. No new source-system or evidence-kind value is introduced.
+- The current contract’s `sitemap` value is used for discovery metadata, while `company_news` remains the source of company-post/news evidence. Exa is a discovery client rather than a new source-system value. No new source-system or evidence-kind value is introduced.
