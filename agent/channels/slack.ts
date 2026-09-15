@@ -14,6 +14,7 @@ import {
   diagnosticSlackPost,
   splitDiagnosticMessage,
 } from '../../lib/signals/autonomous-diagnostic-output';
+import { isSlackThreadRoot } from '../../lib/signals/slack-root';
 
 async function updateDiagnosticRoot(ctx: SlackEventContext, post: ReturnType<typeof diagnosticSlackPost>): Promise<boolean> {
   try {
@@ -21,7 +22,7 @@ async function updateDiagnosticRoot(ctx: SlackEventContext, post: ReturnType<typ
     const root = ctx.thread.recentMessages.find((message) => message.ts === ctx.slack.threadTs);
     // Session-rehydrated Slack bindings intentionally cannot reliably classify
     // messages with `isMe`; validate the bound message is the thread root instead.
-    if (!root || root.threadTs !== root.ts) return false;
+    if (!isSlackThreadRoot(root, ctx.slack.threadTs)) return false;
     const response = await ctx.slack.request('chat.update', {
       channel: ctx.slack.channelId,
       ts: ctx.slack.threadTs,
