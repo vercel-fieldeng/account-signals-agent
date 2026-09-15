@@ -14,15 +14,19 @@ import {
   diagnosticSlackPost,
   splitDiagnosticMessage,
 } from '../../lib/signals/autonomous-diagnostic-output';
-import { isSlackThreadRoot } from '../../lib/signals/slack-root';
+import { isAutonomousSlackThreadRoot } from '../../lib/signals/slack-root';
+
+async function isAutonomousDiagnosticThread(ctx: SlackEventContext): Promise<boolean> {
+  await ctx.thread.refresh();
+  const root = ctx.thread.recentMessages.find((message) => message.ts === ctx.slack.threadTs);
+  // Session-rehydrated Slack bindings cannot reliably classify messages with
+  // `isMe`; botId remains the stable signal for an autonomous bot-owned root.
+  return isAutonomousSlackThreadRoot(root, ctx.slack.threadTs);
+}
 
 async function updateDiagnosticRoot(ctx: SlackEventContext, post: ReturnType<typeof diagnosticSlackPost>): Promise<boolean> {
   try {
-    await ctx.thread.refresh();
-    const root = ctx.thread.recentMessages.find((message) => message.ts === ctx.slack.threadTs);
-    // Session-rehydrated Slack bindings intentionally cannot reliably classify
-    // messages with `isMe`; validate the bound message is the thread root instead.
-    if (!isSlackThreadRoot(root, ctx.slack.threadTs)) return false;
+    if (!await isAutonomousDiagnosticThread(ctx)) return false;
     const response = await ctx.slack.request('chat.update', {
       channel: ctx.slack.channelId,
       ts: ctx.slack.threadTs,
@@ -88,6 +92,10 @@ export default slackChannel({
       }
       const parts = splitDiagnosticMessage(event.message);
       if (!parts) {
+        if (await isAutonomousDiagnosticThread(ctx)) {
+          console.info('diagnostic_interim_message_suppressed');
+          return;
+        }
         await ctx.thread.post(event.message);
         return;
       }
