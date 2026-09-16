@@ -6,8 +6,9 @@ const STATE_PATH = "account-signals/private/automation/control-v1.json"
 const MAX_BYTES = 64 * 1024
 const MAX_RETRIES = 3
 const FUTURE_TOLERANCE_MS = 60_000
-const FIVE_MINUTES = 5 * 60_000
 const MINUTE = 60_000
+const SETUP_DELAY = 5 * MINUTE
+const TRIGGER_COOLDOWN = MINUTE
 const FIFTEEN_MINUTES = 15 * MINUTE
 const CONTINUATION_INTERVAL = MINUTE
 const MAX_CONTINUATIONS = 8
@@ -110,7 +111,7 @@ function jobId(requestId: string): string {
 }
 
 function dueAt(now: Date): string {
-  return new Date(Math.ceil((now.getTime() + FIVE_MINUTES) / MINUTE) * MINUTE).toISOString()
+  return new Date(Math.ceil((now.getTime() + SETUP_DELAY) / MINUTE) * MINUTE).toISOString()
 }
 
 function isConcurrency(error: unknown, creating: boolean): boolean {
@@ -282,7 +283,7 @@ export class AutomationStateStore {
       if (current.job && ["scheduled", "checking", "dispatching", "dispatched"].includes(current.job.status)) {
         fail("Automation trigger is busy")
       }
-      if (current.job?.terminalAt && this.clock().getTime() - Date.parse(current.job.terminalAt) < FIVE_MINUTES) {
+      if (current.job?.terminalAt && this.clock().getTime() - Date.parse(current.job.terminalAt) < TRIGGER_COOLDOWN) {
         fail("Automation trigger cooldown is active")
       }
 

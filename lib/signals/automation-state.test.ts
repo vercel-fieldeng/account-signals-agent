@@ -266,10 +266,10 @@ describe("AutomationStateStore", () => {
     await dueStore.markDispatched(claim!, "session-trigger")
     await dueStore.reconcileSession("session-trigger", "completed")
 
-    await expect(store(state, new Date(baseTime.getTime() + 9 * 60_000)).armImmediate("web-cooldown"))
+    await expect(store(state, new Date(baseTime.getTime() + 6.5 * 60_000)).armImmediate("web-cooldown"))
       .rejects.toThrow("cooldown")
-    const armed = await store(state, new Date(baseTime.getTime() + 12 * 60_000)).armImmediate("web-ready")
-    expect(armed).toMatchObject({ status: "scheduled", dueAt: at(12) })
+    const armed = await store(state, new Date(baseTime.getTime() + 7 * 60_000)).armImmediate("web-ready")
+    expect(armed).toMatchObject({ status: "scheduled", dueAt: at(7) })
   })
 
   it("records a terminal failure without accepting an arbitrary failure code", async () => {
