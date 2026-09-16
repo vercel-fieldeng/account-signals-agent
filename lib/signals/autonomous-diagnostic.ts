@@ -18,21 +18,34 @@ Immediately call the root d0 connection in DISCOVER mode exactly once with this 
 
 Retain the invocation handle and poll that same invocation to terminal, honoring every pollAfterMs. Never restart it. Treat d0's applied filter and returned rows as the scope evidence; do not claim they prove the total size of the SE book. Do not invent accounts, owners, quantities, trends, or outreach routing.
 
-When d0 completes, respond even if Salesforce or external context is unavailable. Rank at most three returned accounts in the BLUF by apparent AE/SA usefulness. For each, state what the signal suggests, why it may matter, confidence, and one concrete next check. Require before/after values only if d0 actually returned a measured change. Name a person to contact only if d0 returned a verified assignment; otherwise say “Owner: not checked.” Put every returned row, up to the requested cap, in DETAIL with account, date, signal/person, returned detail, flip/fetch status, and next check. If d0 returns zero rows, say “No surfaced signals returned for this window”; do not broaden that to healthy, stable, or no opportunity.
+When d0 completes, respond even if Salesforce or external context is unavailable. Rank at most three returned accounts by AE/SA usefulness, prioritizing relevant technical personas and specific use cases over raw signal count. Classify each account as CHECK NOW (concrete technical/team signal), INVESTIGATE (promising but needs validation), or WATCH (isolated soft signal). Require before/after values only if d0 returned a measured change. Put every returned row, up to the requested cap, in DETAIL grouped by account. Use human-readable dates in cards and preserve the exact UTC window only in the coverage footer. If d0 returns zero rows, say “No surfaced signals returned for this window”; do not broaden that to healthy, stable, or no opportunity.
 
-Output exactly:
-BLUF:
-Status: COMPLETE, PARTIAL, or BLOCKED
-Window: [${signalStart}, ${signalEnd}) UTC
-Scope: <returned rows/accounts and any truncation; total book size unknown unless returned>
-Findings: <up to three compact numbered account cards, or the honest zero-row result>
+Output exactly in Slack-compatible mrkdwn:
+BLUF: <dynamic outcome headline: “N accounts worth reviewing”, “No surfaced intent in the last 72h”, “Signal retrieval still running”, or “Signal brief needs attention”>
+Status: <Complete, Partial, Blocked, or WAITING_FOR_D0> · Last 72h · <N signals> · <N accounts>
+
+1. *<CHECK NOW, INVESTIGATE, or WATCH> · <Account>*
+*Why now:* <one sentence grounded in returned signals>
+*Why it matters:* <one sentence for an AE/SA>
+*Next:* <one specific imperative check>
+
+<repeat for at most three accounts; omit numbering for zero rows>
+
+Routing: <one shared sentence; use “CRM ownership not checked” unless d0 returned verified ownership>
 
 DETAIL:
-Surfaced signals:
-<one bullet per returned row, or the zero-row result>
-Coverage: <one sentence on d0 freshness/completeness/truncation and optional enrichment not checked>
+Signal evidence
 
-If d0 is still running when this turn must end, output Status: WAITING_FOR_D0 and exactly: “No signal brief yet—retrieval is still processing; no outreach recommendation is available.” This marker keeps the same session resumable. If d0 requires authorization or fails terminally, use Status: BLOCKED and state one concrete next step. Do not expose tool lifecycle, SQL, credentials, internal IDs, or raw diagnostics.
+*<Account> · <N signal/signals>*
+• <Mon DD> · <signal source> · <person and title or entity> — <returned detail>
+<one bullet per returned row, grouped under its account; do not repeat the account on every bullet>
+
+<repeat for every returned account>
+
+*Coverage*
+Exact window: [${signalStart}, ${signalEnd}) UTC. <one compact sentence covering d0 freshness/completeness/truncation, total-book-size limits, and optional enrichment not checked>. Mention flip/fetch status on a row only when present; if all are zero, state “Flips/fetches: none” once here.
+
+If d0 is still running when this turn must end, use the waiting headline and Status: WAITING_FOR_D0, then put exactly “No signal brief yet—retrieval is still processing; no outreach recommendation is available.” in DETAIL. This marker keeps the same session resumable. If d0 requires authorization or fails terminally, use the attention headline and Status: Blocked with one concrete next step. Do not expose tool lifecycle, SQL, credentials, internal IDs, or raw diagnostics.
 
 Do not call collect_external_signals or Salesforce during this diagnostic. Do not write baselines, mutate customer systems, publish exports, call setup_automation, or create schedules.`
 }

@@ -31,6 +31,22 @@ describe("autonomous diagnostic Slack envelope", () => {
     expect(post.blocks[2]).toMatchObject({ type: "section" })
   })
 
+  it("renders a dynamic triage headline with separated account cards and a routing footer", () => {
+    const post = diagnosticSlackPost(
+      "BLUF: 2 accounts worth reviewing\nStatus: Complete · Last 72h · 4 signals · 2 accounts\n\n1. *INVESTIGATE · IQAir AG*\n*Why now:* Technical lead registered for an agentic commerce webinar.\n*Why it matters:* Relevant technical persona and use case.\n*Next:* Check for an active commerce project.\n\n2. *WATCH · Personio*\n*Why now:* Three person-level signals.\n*Why it matters:* Potential coordinated exploration.\n*Next:* Check whether signups share a team.\n\nRouting: CRM ownership not checked.",
+    )
+    expect(post.blocks[0]).toEqual({
+      type: "header",
+      text: { type: "plain_text", text: "2 accounts worth reviewing" },
+    })
+    expect(post.blocks[1]).toMatchObject({ type: "context" })
+    expect(post.blocks.filter((block) => block.type === "divider")).toHaveLength(1)
+    const sections = post.blocks.filter((block): block is Extract<typeof block, { type: "section" }> => block.type === "section")
+    expect(sections[0].text.text).toContain("INVESTIGATE · IQAir AG")
+    expect(sections[1].text.text).toContain("WATCH · Personio")
+    expect(sections[2].text.text).toBe("Routing: CRM ownership not checked.")
+  })
+
   it("converts model Markdown to Slack mrkdwn without changing code", () => {
     const post = diagnosticSlackPost(
       "BLUF: *Signal*\n\n**Findings**\n\n1. **Nintendo**\n- **Evidence:** [announcement](https://example.com/direct)\n- `**literal**`\n- ~~superseded~~",

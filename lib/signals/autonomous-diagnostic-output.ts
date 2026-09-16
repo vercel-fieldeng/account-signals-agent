@@ -6,6 +6,7 @@ export type DiagnosticMessageParts = {
 export type DiagnosticSlackBlock =
   | { type: "header"; text: { type: "plain_text"; text: string } }
   | { type: "context"; elements: Array<{ type: "mrkdwn"; text: string }> }
+  | { type: "divider" }
   | { type: "section"; text: { type: "mrkdwn"; text: string } }
 
 export type DiagnosticSlackPost = {
@@ -91,8 +92,12 @@ export function diagnosticSlackPost(markdown: string): DiagnosticSlackPost {
   if (metadata.length > 0) {
     blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: metadata.join("\n") }] })
   }
+  let accountCards = 0
   for (const section of sections) {
+    const isAccountCard = /^\d+\.\s+\*/u.test(section)
+    if (isAccountCard && accountCards > 0) blocks.push({ type: "divider" })
     blocks.push({ type: "section", text: { type: "mrkdwn", text: section.slice(0, 3000) } })
+    if (isAccountCard) accountCards += 1
   }
 
   return { text: markdownToSlackMrkdwn(markdown), blocks: blocks.slice(0, 50) }
