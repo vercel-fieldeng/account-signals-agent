@@ -9,6 +9,8 @@ const FUTURE_TOLERANCE_MS = 60_000
 const FIVE_MINUTES = 5 * 60_000
 const MINUTE = 60_000
 const FIFTEEN_MINUTES = 15 * MINUTE
+const CONTINUATION_INTERVAL = MINUTE
+const MAX_CONTINUATIONS = 8
 const PAUSED_TOMBSTONE = "__paused__"
 
 export type SetupTicket = { requestId: string; generation: number }
@@ -18,6 +20,9 @@ export type AutomationJob = {
   status: "scheduled" | "checking" | "dispatching" | "dispatched" | "completed" | "failed" | "blocked" | "cancelled"
   claimToken?: string
   acceptedSessionId?: string
+  dispatchedAt?: string
+  continuationCount?: number
+  lastContinuationAt?: string
   terminalAt?: string
   failureCode?: string
 }
@@ -122,12 +127,15 @@ function isConcurrency(error: unknown, creating: boolean): boolean {
 }
 
 function validJob(value: unknown): value is AutomationJob {
-  if (!record(value) || !exactKeys(value, ["id", "dueAt", "status", "claimToken", "acceptedSessionId", "terminalAt", "failureCode"])) return false
+  if (!record(value) || !exactKeys(value, ["id", "dueAt", "status", "claimToken", "acceptedSessionId", "dispatchedAt", "continuationCount", "lastContinuationAt", "terminalAt", "failureCode"])) return false
   if (typeof value.id !== "string" || value.id.length === 0 || !safeDate(value.dueAt)) return false
   const status = value.status
   if (!(typeof status === "string" && ["scheduled", "checking", "dispatching", "dispatched", "completed", "failed", "blocked", "cancelled"].includes(status))) return false
   if (value.claimToken !== undefined && (typeof value.claimToken !== "string" || value.claimToken.length === 0)) return false
   if (value.acceptedSessionId !== undefined && (typeof value.acceptedSessionId !== "string" || value.acceptedSessionId.length === 0)) return false
+  if (value.dispatchedAt !== undefined && !safeDate(value.dispatchedAt)) return false
+  if (value.continuationCount !== undefined && (typeof value.continuationCount !== "number" || !Number.isSafeInteger(value.continuationCount) || value.continuationCount < 0 || value.continuationCount > MAX_CONTINUATIONS)) return false
+  if (value.lastContinuationAt !== undefined && !safeDate(value.lastContinuationAt)) return false
   if (value.terminalAt !== undefined && !safeDate(value.terminalAt)) return false
   if (value.failureCode !== undefined && (typeof value.failureCode !== "string" || value.failureCode.length === 0)) return false
   if ((status === "checking" || status === "dispatching") && typeof value.claimToken !== "string") return false
@@ -371,8 +379,41 @@ export class AutomationStateStore {
     if (typeof sessionId !== "string" || sessionId.length === 0 || sessionId.length > 256) fail("Invalid automation session")
     await this.mutate<void>((current) => {
       if (!this.matchesDispatch(current, claim)) fail("Automation claim is stale")
-      const job: AutomationJob = { ...current!.job!, status: "dispatched", acceptedSessionId: sessionId, claimToken: undefined }
-      return { state: { ...current!, job, updatedAt: this.clock().toISOString() }, result: undefined }
+      const dispatchedAt = this.clock().toISOString()
+      const job: AutomationJob = {
+        ...current!.job!,
+        status: "dispatched",
+        acceptedSessionId: sessionId,
+        dispatchedAt,
+        continuationCount: 0,
+        lastContinuationAt: undefined,
+        claimToken: undefined,
+      }
+      return { state: { ...current!, job, updatedAt: dispatchedAt }, result: undefined }
+    })
+  }
+
+  /** Claim one durable continuation turn for an accepted session still waiting on d0. */
+  async claimContinuation(sessionId: string, minAgeMs = CONTINUATION_INTERVAL): Promise<ClaimedAutomationJob | null> {
+    if (typeof sessionId !== "string" || sessionId.length === 0 || sessionId.length > 256) fail("Invalid automation session")
+    if (!Number.isSafeInteger(minAgeMs) || minAgeMs < CONTINUATION_INTERVAL) fail("Invalid continuation interval")
+    return this.mutate((current) => {
+      const job = current?.job
+      if (!current || current.paused || !job || job.status !== "dispatched" || job.acceptedSessionId !== sessionId) {
+        return { state: current, result: null }
+      }
+      const count = job.continuationCount ?? 0
+      if (count >= MAX_CONTINUATIONS) return { state: current, result: null }
+      const last = Date.parse(job.lastContinuationAt ?? job.dispatchedAt ?? current.updatedAt)
+      if (!Number.isFinite(last) || this.clock().getTime() - last < minAgeMs) {
+        return { state: current, result: null }
+      }
+      const now = this.clock().toISOString()
+      const nextJob: AutomationJob = { ...job, continuationCount: count + 1, lastContinuationAt: now }
+      return {
+        state: { ...current, job: nextJob, updatedAt: now },
+        result: { job: nextJob, owner: current.owner, generation: current.generation },
+      }
     })
   }
 
@@ -409,7 +450,7 @@ export class AutomationStateStore {
       if (!job || job.status !== "dispatched" || !job.acceptedSessionId) {
         return { state: current, result: { reconciled: false, state: current } }
       }
-      const age = this.clock().getTime() - Date.parse(current.updatedAt)
+      const age = this.clock().getTime() - Date.parse(job.dispatchedAt ?? current.updatedAt)
       if (!Number.isFinite(age) || age < maxAgeMs) {
         return { state: current, result: { reconciled: false, state: current } }
       }
