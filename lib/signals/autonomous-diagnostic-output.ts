@@ -71,13 +71,35 @@ export function markdownToSlackMrkdwn(markdown: string): string {
   return result + convertMarkdownText(markdown.slice(cursor))
 }
 
+function splitSlackParagraphs(body: string): string[] {
+  const paragraphs: string[] = []
+  let current: string[] = []
+  const flush = () => {
+    const paragraph = current.join("\n").trim()
+    if (paragraph) paragraphs.push(paragraph)
+    current = []
+  }
+
+  for (const line of body.split("\n")) {
+    const trimmed = line.trim()
+    if (!trimmed) {
+      flush()
+      continue
+    }
+    if (/^(?:\d+\.\s+)?\*Account:\*/u.test(trimmed) && current.length > 0) flush()
+    current.push(line)
+  }
+  flush()
+  return paragraphs
+}
+
 /** Render compact Slack blocks with Slack-native mrkdwn syntax. */
 export function diagnosticSlackPost(markdown: string): DiagnosticSlackPost {
   const lines = markdown.split("\n")
   const first = lines.shift()?.trim() ?? ""
   const title = plainText(first) || "Account Signals"
   const body = lines.join("\n").trim()
-  const paragraphs = body.split(/\n\s*\n/u).map((paragraph) => paragraph.trim()).filter(Boolean)
+  const paragraphs = splitSlackParagraphs(body)
   const metadata: string[] = []
   const sections: string[] = []
 
@@ -98,7 +120,7 @@ export function diagnosticSlackPost(markdown: string): DiagnosticSlackPost {
   }
   let accountCards = 0
   for (const section of sections) {
-    const isAccountCard = /^\d+\.\s+\*/u.test(section)
+    const isAccountCard = /^(?:\d+\.\s+)?\*Account:\*/u.test(section)
     if (isAccountCard && accountCards > 0) blocks.push({ type: "divider" })
     blocks.push({ type: "section", text: { type: "mrkdwn", text: section.slice(0, 3000) } })
     if (isAccountCard) accountCards += 1

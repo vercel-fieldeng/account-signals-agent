@@ -30,7 +30,7 @@ Output exactly in Slack-compatible mrkdwn:
 BLUF: <dynamic outcome headline: “N accounts worth reviewing”, “No surfaced intent in the last 72h”, “Signal retrieval still running”, “Context enrichment still running”, or “Signal brief needs attention”>
 Status: <Complete, Partial, Blocked, WAITING_FOR_D0, or WAITING_FOR_CONTEXT> · 72h · <N signals> · <N accounts> · Context <N/N or partial>
 
-1. *Account:* <Salesforce link if verified, otherwise account name>
+*Account:* <Salesforce link if verified, otherwise account name>
 *Signal:* <max 110 characters; count + compact event/person summary>
 *Hypothesis:* <max 170 characters; Existing motion, Possible new motion, or Unclear + context-backed meaning> Confidence: <High, Medium, or Low>.
 *Contacts:* <max 100 characters; strongest signal actor +N · Route: at most two stakeholders>
