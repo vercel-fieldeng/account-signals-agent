@@ -7,20 +7,27 @@ import indexConnection from "../../agent/connections/index"
 const instructions = readFileSync(resolve(process.cwd(), "agent/instructions.md"), "utf8")
 
 describe("root data connection safeguards", () => {
-  it("uses an environment-backed header and bounded tools for Index", async () => {
-    const previous = process.env.INDEX_PROTECTION_BYPASS
+  it("uses environment-backed bearer and protection credentials with bounded Index tools", async () => {
+    const previousBypass = process.env.INDEX_PROTECTION_BYPASS
+    const previousToken = process.env.INDEX_ACCESS_TOKEN
     process.env.INDEX_PROTECTION_BYPASS = "test-bypass"
+    process.env.INDEX_ACCESS_TOKEN = "test-token"
     try {
       expect(indexConnection.url).toBe("https://index.vercel.sh/api/mcp")
       expect(indexConnection.tools).toEqual({
         allow: ["search_meetings", "get_meeting_transcript", "sfdc_lookup"],
       })
+      expect(indexConnection.auth).toMatchObject({ principalType: "app" })
+      const auth = indexConnection.auth as { getToken: () => Promise<{ token: string }> }
+      await expect(auth.getToken()).resolves.toEqual({ token: "test-token" })
       expect(typeof indexConnection.headers).toBe("function")
       const headers = await (indexConnection.headers as () => Promise<Record<string, string>> | Record<string, string>)()
       expect(headers).toEqual({ "x-vercel-protection-bypass": "test-bypass" })
     } finally {
-      if (previous === undefined) delete process.env.INDEX_PROTECTION_BYPASS
-      else process.env.INDEX_PROTECTION_BYPASS = previous
+      if (previousBypass === undefined) delete process.env.INDEX_PROTECTION_BYPASS
+      else process.env.INDEX_PROTECTION_BYPASS = previousBypass
+      if (previousToken === undefined) delete process.env.INDEX_ACCESS_TOKEN
+      else process.env.INDEX_ACCESS_TOKEN = previousToken
     }
   })
 
