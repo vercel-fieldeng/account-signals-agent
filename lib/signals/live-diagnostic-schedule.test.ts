@@ -11,7 +11,7 @@ vi.mock("./autonomous-diagnostic", () => ({
   runAutonomousDiagnostic: runner,
 }))
 
-const { default: schedule } = await import("../../agent/schedules/live-diagnostic")
+const { default: schedule, selectDiagnosticRootTs } = await import("../../agent/schedules/live-diagnostic")
 type ScheduleArgs = Parameters<typeof schedule.run>[0]
 type TargetHandle = ReturnType<ScheduleArgs["to"]>
 type Session = Awaited<ReturnType<TargetHandle["send"]>>
@@ -37,6 +37,15 @@ function reset() {
 describe("native owner-bound diagnostic schedule", () => {
   it("runs every minute", () => {
     expect(schedule.cron).toBe("* * * * *")
+  })
+
+  it("selects the latest root by verified app identity, independent of mutable text", () => {
+    expect(selectDiagnosticRootTs([
+      { ts: "100.1", user: "other", bot_id: "other-bot" },
+      { ts: "101.1", user: "app-user" },
+      { ts: "102.1", bot_id: "app-bot" },
+    ], { user_id: "app-user", bot_id: "app-bot" })).toBe("102.1")
+    expect(selectDiagnosticRootTs([{ ts: "103.1", user: "other" }], { user_id: "app-user" })).toBeNull()
   })
 
   it("registers the complete runner promise, awaits it, and creates the target only when dispatch is called", async () => {

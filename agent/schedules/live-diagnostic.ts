@@ -18,22 +18,33 @@ const diagnosticInitialMessage = {
 
 const continuationPrompt = `Continue the existing signal brief without restarting d0. If the retained d0 invocation is pending, call agent_get and honor pollAfterMs. If d0 is terminal and Salesforce/Index context enrichment is pending, reuse its returned rows and finish the bounded enrichment for at most three accounts. Return the required Account/Signal/Context/Hypothesis/Contacts/Next step BLUF and grouped evidence DETAIL when complete. Use Status: WAITING_FOR_D0 or Status: WAITING_FOR_CONTEXT only when that stage is still running so the session remains resumable.`
 
-type SlackHistoryMessage = { ts?: unknown; bot_id?: unknown; subtype?: unknown; text?: unknown }
+type SlackHistoryMessage = { ts?: unknown; bot_id?: unknown; user?: unknown }
+type SlackAppIdentity = { user_id?: unknown; bot_id?: unknown }
+
+export function selectDiagnosticRootTs(messages: SlackHistoryMessage[], identity: SlackAppIdentity): string | null {
+  const candidates = messages
+    .filter((message) => typeof message.ts === "string")
+    .filter((message) =>
+      (typeof identity.user_id === "string" && message.user === identity.user_id) ||
+      (typeof identity.bot_id === "string" && message.bot_id === identity.bot_id))
+    .sort((a, b) => Number.parseFloat(String(b.ts)) - Number.parseFloat(String(a.ts)))
+  return candidates.length > 0 ? String(candidates[0].ts) : null
+}
 
 async function findDiagnosticRootTs(channelId: string, dispatchedAt: string): Promise<string | null> {
   const token = await getToken("slack/account-signals-slack", { subject: { type: "app" } })
+  const headers = { authorization: `Bearer ${token}` }
+  const identityResponse = await fetch("https://slack.com/api/auth.test", { headers })
+  if (!identityResponse.ok) return null
+  const identity = await identityResponse.json() as SlackAppIdentity & { ok?: boolean }
+  if (identity.ok !== true || (typeof identity.user_id !== "string" && typeof identity.bot_id !== "string")) return null
+
   const oldest = Math.max(0, (Date.parse(dispatchedAt) - 30_000) / 1000)
-  const response = await fetch(`https://slack.com/api/conversations.history?channel=${encodeURIComponent(channelId)}&limit=100&oldest=${oldest}`, {
-    headers: { authorization: `Bearer ${token}` },
-  })
+  const response = await fetch(`https://slack.com/api/conversations.history?channel=${encodeURIComponent(channelId)}&limit=100&oldest=${oldest}`, { headers })
   if (!response.ok) return null
   const payload = await response.json() as { ok?: boolean; messages?: SlackHistoryMessage[] }
   if (payload.ok !== true || !Array.isArray(payload.messages)) return null
-  const candidates = payload.messages
-    .filter((message) => typeof message.ts === "string" && (typeof message.bot_id === "string" || message.subtype === "bot_message"))
-    .filter((message) => typeof message.text === "string" && message.text.includes("Account Signals"))
-    .sort((a, b) => Number.parseFloat(String(b.ts)) - Number.parseFloat(String(a.ts)))
-  return candidates.length > 0 ? String(candidates[0].ts) : null
+  return selectDiagnosticRootTs(payload.messages, identity)
 }
 
 async function continuePendingDiagnostic(
