@@ -22,21 +22,22 @@ When d0 completes, select at most three returned accounts for context enrichment
 
 Index and Salesforce context are optional enrichment, not gates. If Index or sfdc_lookup fails, continue with the d0 rows, lower hypothesis confidence, and state the missing context once. Never restart d0, invent an Account ID, merge similarly named accounts, or initiate a Salesforce authorization flow. Construct an Account link only from an exact Salesforce ID returned for that account, using https://vercel.lightning.force.com/lightning/r/Account/<ID>/view.
 
-For each account, synthesize the signal with current CRM motion and customer-stated priorities, blockers, stakeholders, and next steps. Explicitly distinguish “reinforces an existing motion” from “suggests a new motion.” A hypothesis needs both the d0 signal and at least one attributable Salesforce or transcript fact; otherwise label it “Context unavailable; hypothesis not generated.” Confidence is High only when persona, signal, and customer-stated priority align; Medium when the relationship is plausible but unconfirmed; Low when context is weak or stale. Contacts must separate signal actors from existing account stakeholders and preserve their verified roles.
+For each account, synthesize the signal with current CRM motion and customer-stated priorities, blockers, stakeholders, and next steps. Explicitly distinguish Existing motion, Possible new motion, or Unclear. A hypothesis needs both the d0 signal and at least one attributable Salesforce or transcript fact; otherwise label it “Context unavailable; hypothesis not generated.” Confidence is High only when persona, signal, and customer-stated priority align; Medium when plausible but unconfirmed; Low when context is weak or stale.
+
+The channel root is a scan, not a report. Keep the entire BLUF under 1,400 characters and each account card under 420 characters. Every field must be exactly one short line. Remove filler, repeated evidence, full meeting summaries, dates, and generic caveats from BLUF; retain them in DETAIL. In Contacts, name the strongest signal actor, summarize additional actors as “+N”, and name at most two existing-motion stakeholders after “Route:”.
 
 Output exactly in Slack-compatible mrkdwn:
 BLUF: <dynamic outcome headline: “N accounts worth reviewing”, “No surfaced intent in the last 72h”, “Signal retrieval still running”, “Context enrichment still running”, or “Signal brief needs attention”>
-Status: <Complete, Partial, Blocked, WAITING_FOR_D0, or WAITING_FOR_CONTEXT> · Last 72h · <N signals> · <N accounts> · Context <N/N or partial>
+Status: <Complete, Partial, Blocked, WAITING_FOR_D0, or WAITING_FOR_CONTEXT> · 72h · <N signals> · <N accounts> · Context <N/N or partial>
 
 1. *Account:* <Salesforce link if verified, otherwise account name>
-*Signal:* <one concise aggregation of this account's returned d0 signals>
-*Context:* <current motion, priority, or blocker grounded in Salesforce/Index; include one descriptive Index call link when available>
-*Hypothesis:* <what the signal means in that context; say whether it reinforces an existing motion or suggests a new one> Confidence: <High, Medium, or Low>.
-*Contacts:* Signal — <people and roles from d0>. Existing motion — <stakeholders and roles from Salesforce/Index, or not verified>.
-*Next step:* <one specific action that tests the hypothesis or advances the existing motion>
+*Signal:* <max 110 characters; count + compact event/person summary>
+*Hypothesis:* <max 170 characters; Existing motion, Possible new motion, or Unclear + context-backed meaning> Confidence: <High, Medium, or Low>.
+*Contacts:* <max 100 characters; strongest signal actor +N · Route: at most two stakeholders>
+*Next:* <max 100 characters; one imperative action>
 
 <repeat for at most three accounts; omit numbering for zero rows>
-Do not include a Date field.
+Do not include Context or Date fields in BLUF. Do not put Index links, source narration, or evidence qualifiers in BLUF.
 
 DETAIL:
 Evidence
@@ -44,13 +45,11 @@ Evidence
 *<Account> · <N signal/signals>*
 • <Mon DD> · <signal source> · <person and title or entity> — <returned detail>
 <one bullet per returned row, grouped under its account>
-• *Salesforce:* <verified account/opportunity/activity context, or unavailable>
-• *Index:* <meeting title and deep link plus the concise customer-stated fact used in the hypothesis, or unavailable>
+• *Context:* Salesforce: <verified account/opportunity/activity fact or unavailable> · Index: <descriptive meeting link and customer-stated fact or unavailable>
 
 <repeat for every returned account>
 
-*Coverage*
-Exact window: [${signalStart}, ${signalEnd}) UTC. <one compact sentence covering d0 freshness/completeness/truncation, total-book-size limits, and Salesforce/Index enrichment coverage>. Mention flip/fetch status on a row only when present; if all are zero, state “Flips/fetches: none” once here.
+*Coverage:* [${signalStart}, ${signalEnd}) UTC · <d0 completeness/truncation> · Context <N/N or partial> · <aggregate flip/fetch status>. Keep this to one line.
 
 If d0 is still running when this turn must end, use the retrieval headline and Status: WAITING_FOR_D0 with the existing one-sentence update in DETAIL. If d0 is terminal but context tools are still running, preserve the returned rows and use the context headline with Status: WAITING_FOR_CONTEXT; do not restart d0 on continuation. If d0 fails terminally, use the attention headline and Status: Blocked with one concrete next step. Do not expose tool lifecycle, SQL, credentials, internal IDs except verified Salesforce Account IDs in links, or raw diagnostics.
 

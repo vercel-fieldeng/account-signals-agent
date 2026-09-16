@@ -39,7 +39,7 @@ describe("autonomous diagnostic Slack envelope", () => {
 
   it("renders dynamic enriched account cards with a divider", () => {
     const post = diagnosticSlackPost(
-      "BLUF: 2 accounts worth reviewing\nStatus: Complete · Last 72h · 4 signals · 2 accounts · Context 2/2\n\n1. *Account:* <https://example.test/personio|Personio>\n*Signal:* Three RevOps signals.\n*Context:* Existing internal-app governance motion.\n*Hypothesis:* This reinforces the existing motion. Confidence: High.\n*Contacts:* Signal — three RevOps users. Existing motion — Andru Dunn.\n*Next step:* Validate RevOps as a pilot cohort.\n\n2. *Account:* IQAir AG\n*Signal:* Technical lead attended an agentic commerce webinar.\n*Context:* Existing storefront modernization motion.\n*Hypothesis:* This may suggest an adjacent use case. Confidence: Medium.\n*Contacts:* Signal — Ardit Dine. Existing motion — Fay Lim.\n*Next step:* Confirm whether the initiatives are connected.",
+      "BLUF: 2 accounts worth reviewing\nStatus: Complete · 72h · 4 signals · 2 accounts · Context 2/2\n\n1. *Account:* <https://example.test/personio|Personio>\n*Signal:* 3 signals · 2 RevOps signups + Head of RevOps webinar\n*Hypothesis:* Existing motion · RevOps may become an EAA pilot cohort. Confidence: High.\n*Contacts:* Christian Willems +2 · Route: Andru Dunn / James Arch\n*Next:* Validate whether RevOps is part of the internal-app initiative.\n\n2. *Account:* IQAir AG\n*Signal:* 1 signal · Web Tech Lead joined Agentic Shopify webinar\n*Hypothesis:* Existing motion · Adjacent to storefront and crawler-efficiency work. Confidence: Medium.\n*Contacts:* Ardit Dine · Route: Fay Lim\n*Next:* Ask whether the webinar maps to current storefront work.",
     )
     expect(post.blocks[0]).toEqual({
       type: "header",
@@ -51,7 +51,8 @@ describe("autonomous diagnostic Slack envelope", () => {
     expect(sections[0].text.text).toContain("*Account:* <https://example.test/personio|Personio>")
     expect(sections[0].text.text).toContain("*Hypothesis:*")
     expect(sections[1].text.text).toContain("*Account:* IQAir AG")
-    expect(sections[1].text.text).toContain("*Next step:*")
+    expect(sections[1].text.text).toContain("*Next:*")
+    expect(sections.map((section) => section.text.text).join("\n")).not.toContain("*Context:*")
   })
 
   it("converts model Markdown to Slack mrkdwn without changing code", () => {
