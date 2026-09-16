@@ -31,9 +31,9 @@ describe("autonomous diagnostic Slack envelope", () => {
     expect(post.blocks[2]).toMatchObject({ type: "section" })
   })
 
-  it("renders a dynamic triage headline with separated account cards and a routing footer", () => {
+  it("renders dynamic enriched account cards with a divider", () => {
     const post = diagnosticSlackPost(
-      "BLUF: 2 accounts worth reviewing\nStatus: Complete · Last 72h · 4 signals · 2 accounts\n\n1. *INVESTIGATE · IQAir AG*\n*Why now:* Technical lead registered for an agentic commerce webinar.\n*Why it matters:* Relevant technical persona and use case.\n*Next:* Check for an active commerce project.\n\n2. *WATCH · Personio*\n*Why now:* Three person-level signals.\n*Why it matters:* Potential coordinated exploration.\n*Next:* Check whether signups share a team.\n\nRouting: CRM ownership not checked.",
+      "BLUF: 2 accounts worth reviewing\nStatus: Complete · Last 72h · 4 signals · 2 accounts · Context 2/2\n\n1. *Account:* <https://example.test/personio|Personio>\n*Signal:* Three RevOps signals.\n*Context:* Existing internal-app governance motion.\n*Hypothesis:* This reinforces the existing motion. Confidence: High.\n*Contacts:* Signal — three RevOps users. Existing motion — Andru Dunn.\n*Next step:* Validate RevOps as a pilot cohort.\n\n2. *Account:* IQAir AG\n*Signal:* Technical lead attended an agentic commerce webinar.\n*Context:* Existing storefront modernization motion.\n*Hypothesis:* This may suggest an adjacent use case. Confidence: Medium.\n*Contacts:* Signal — Ardit Dine. Existing motion — Fay Lim.\n*Next step:* Confirm whether the initiatives are connected.",
     )
     expect(post.blocks[0]).toEqual({
       type: "header",
@@ -42,9 +42,10 @@ describe("autonomous diagnostic Slack envelope", () => {
     expect(post.blocks[1]).toMatchObject({ type: "context" })
     expect(post.blocks.filter((block) => block.type === "divider")).toHaveLength(1)
     const sections = post.blocks.filter((block): block is Extract<typeof block, { type: "section" }> => block.type === "section")
-    expect(sections[0].text.text).toContain("INVESTIGATE · IQAir AG")
-    expect(sections[1].text.text).toContain("WATCH · Personio")
-    expect(sections[2].text.text).toBe("Routing: CRM ownership not checked.")
+    expect(sections[0].text.text).toContain("*Account:* <https://example.test/personio|Personio>")
+    expect(sections[0].text.text).toContain("*Hypothesis:*")
+    expect(sections[1].text.text).toContain("*Account:* IQAir AG")
+    expect(sections[1].text.text).toContain("*Next step:*")
   })
 
   it("converts model Markdown to Slack mrkdwn without changing code", () => {

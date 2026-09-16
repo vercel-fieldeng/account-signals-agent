@@ -2,11 +2,29 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import d0Connection from "../../agent/connections/d0"
+import indexConnection from "../../agent/connections/index"
 
 const instructions = readFileSync(resolve(process.cwd(), "agent/instructions.md"), "utf8")
 
-describe("root d0 connection safeguards", () => {
-  it("uses the verified user connector and only exposes the bounded lifecycle", () => {
+describe("root data connection safeguards", () => {
+  it("uses an environment-backed header and bounded tools for Index", async () => {
+    const previous = process.env.INDEX_PROTECTION_BYPASS
+    process.env.INDEX_PROTECTION_BYPASS = "test-bypass"
+    try {
+      expect(indexConnection.url).toBe("https://index.vercel.sh/api/mcp")
+      expect(indexConnection.tools).toEqual({
+        allow: ["search_meetings", "get_meeting_transcript", "sfdc_lookup"],
+      })
+      expect(typeof indexConnection.headers).toBe("function")
+      const headers = await (indexConnection.headers as () => Promise<Record<string, string>> | Record<string, string>)()
+      expect(headers).toEqual({ "x-vercel-protection-bypass": "test-bypass" })
+    } finally {
+      if (previous === undefined) delete process.env.INDEX_PROTECTION_BYPASS
+      else process.env.INDEX_PROTECTION_BYPASS = previous
+    }
+  })
+
+  it("uses the verified user connector and only exposes the bounded d0 lifecycle", () => {
     expect(d0Connection.url).toBe("https://d0-web.vercel.tools/eve/v1/mcp")
     expect(d0Connection.auth).toMatchObject({
       principalType: "user",

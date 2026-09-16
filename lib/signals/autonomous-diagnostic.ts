@@ -18,36 +18,43 @@ Immediately call the root d0 connection in DISCOVER mode exactly once with this 
 
 Retain the invocation handle and poll that same invocation to terminal, honoring every pollAfterMs. Never restart it. Treat d0's applied filter and returned rows as the scope evidence; do not claim they prove the total size of the SE book. Do not invent accounts, owners, quantities, trends, or outreach routing.
 
-When d0 completes, respond even if Salesforce or external context is unavailable. Rank at most three returned accounts by AE/SA usefulness, prioritizing relevant technical personas and specific use cases over raw signal count. Classify each account as CHECK NOW (concrete technical/team signal), INVESTIGATE (promising but needs validation), or WATCH (isolated soft signal). Require before/after values only if d0 returned a measured change. Put every returned row, up to the requested cap, in DETAIL grouped by account. Use human-readable dates in cards and preserve the exact UTC window only in the coverage footer. If d0 returns zero rows, say “No surfaced signals returned for this window”; do not broaden that to healthy, stable, or no opportunity.
+When d0 completes, select at most three returned accounts for context enrichment. For each selected account, use the root Index connection: search up to three recent meetings across all accessible capture sources using the exact account name, verify the returned account association, retain its 18-character Salesforce Account ID, and call sfdc_lookup once for current Salesforce account/activity context. Choose the meeting most relevant to the surfaced signal and retrieve at most one speaker-attributed transcript per account. Use a bounded 0–3600 second transcript window and cite the returned Index deep link. Do not use recaps alone as customer evidence.
+
+Index and Salesforce context are optional enrichment, not gates. If Index or sfdc_lookup fails, continue with the d0 rows, lower hypothesis confidence, and state the missing context once. Never restart d0, invent an Account ID, merge similarly named accounts, or initiate a Salesforce authorization flow. Construct an Account link only from an exact Salesforce ID returned for that account, using https://vercel.lightning.force.com/lightning/r/Account/<ID>/view.
+
+For each account, synthesize the signal with current CRM motion and customer-stated priorities, blockers, stakeholders, and next steps. Explicitly distinguish “reinforces an existing motion” from “suggests a new motion.” A hypothesis needs both the d0 signal and at least one attributable Salesforce or transcript fact; otherwise label it “Context unavailable; hypothesis not generated.” Confidence is High only when persona, signal, and customer-stated priority align; Medium when the relationship is plausible but unconfirmed; Low when context is weak or stale. Contacts must separate signal actors from existing account stakeholders and preserve their verified roles.
 
 Output exactly in Slack-compatible mrkdwn:
-BLUF: <dynamic outcome headline: “N accounts worth reviewing”, “No surfaced intent in the last 72h”, “Signal retrieval still running”, or “Signal brief needs attention”>
-Status: <Complete, Partial, Blocked, or WAITING_FOR_D0> · Last 72h · <N signals> · <N accounts>
+BLUF: <dynamic outcome headline: “N accounts worth reviewing”, “No surfaced intent in the last 72h”, “Signal retrieval still running”, “Context enrichment still running”, or “Signal brief needs attention”>
+Status: <Complete, Partial, Blocked, WAITING_FOR_D0, or WAITING_FOR_CONTEXT> · Last 72h · <N signals> · <N accounts> · Context <N/N or partial>
 
-1. *<CHECK NOW, INVESTIGATE, or WATCH> · <Account>*
-*Why now:* <one sentence grounded in returned signals>
-*Why it matters:* <one sentence for an AE/SA>
-*Next:* <one specific imperative check>
+1. *Account:* <Salesforce link if verified, otherwise account name>
+*Signal:* <one concise aggregation of this account's returned d0 signals>
+*Context:* <current motion, priority, or blocker grounded in Salesforce/Index; include one descriptive Index call link when available>
+*Hypothesis:* <what the signal means in that context; say whether it reinforces an existing motion or suggests a new one> Confidence: <High, Medium, or Low>.
+*Contacts:* Signal — <people and roles from d0>. Existing motion — <stakeholders and roles from Salesforce/Index, or not verified>.
+*Next step:* <one specific action that tests the hypothesis or advances the existing motion>
 
 <repeat for at most three accounts; omit numbering for zero rows>
-
-Routing: <one shared sentence; use “CRM ownership not checked” unless d0 returned verified ownership>
+Do not include a Date field.
 
 DETAIL:
-Signal evidence
+Evidence
 
 *<Account> · <N signal/signals>*
 • <Mon DD> · <signal source> · <person and title or entity> — <returned detail>
-<one bullet per returned row, grouped under its account; do not repeat the account on every bullet>
+<one bullet per returned row, grouped under its account>
+• *Salesforce:* <verified account/opportunity/activity context, or unavailable>
+• *Index:* <meeting title and deep link plus the concise customer-stated fact used in the hypothesis, or unavailable>
 
 <repeat for every returned account>
 
 *Coverage*
-Exact window: [${signalStart}, ${signalEnd}) UTC. <one compact sentence covering d0 freshness/completeness/truncation, total-book-size limits, and optional enrichment not checked>. Mention flip/fetch status on a row only when present; if all are zero, state “Flips/fetches: none” once here.
+Exact window: [${signalStart}, ${signalEnd}) UTC. <one compact sentence covering d0 freshness/completeness/truncation, total-book-size limits, and Salesforce/Index enrichment coverage>. Mention flip/fetch status on a row only when present; if all are zero, state “Flips/fetches: none” once here.
 
-If d0 is still running when this turn must end, use the waiting headline and Status: WAITING_FOR_D0, then put exactly “No signal brief yet—retrieval is still processing; no outreach recommendation is available.” in DETAIL. This marker keeps the same session resumable. If d0 requires authorization or fails terminally, use the attention headline and Status: Blocked with one concrete next step. Do not expose tool lifecycle, SQL, credentials, internal IDs, or raw diagnostics.
+If d0 is still running when this turn must end, use the retrieval headline and Status: WAITING_FOR_D0 with the existing one-sentence update in DETAIL. If d0 is terminal but context tools are still running, preserve the returned rows and use the context headline with Status: WAITING_FOR_CONTEXT; do not restart d0 on continuation. If d0 fails terminally, use the attention headline and Status: Blocked with one concrete next step. Do not expose tool lifecycle, SQL, credentials, internal IDs except verified Salesforce Account IDs in links, or raw diagnostics.
 
-Do not call collect_external_signals or Salesforce during this diagnostic. Do not write baselines, mutate customer systems, publish exports, call setup_automation, or create schedules.`
+Do not call collect_external_signals or web research during this diagnostic. Salesforce and Index enrichment must remain read-only and bounded to the surfaced accounts. Do not write baselines, mutate customer systems, publish exports, call setup_automation, or create schedules.`
 }
 
 type RunnerStore = Pick<AutomationStateStore, "read" | "claimDue" | "authorizeDispatch" | "markDispatched" | "block">
