@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { diagnosticSlackPost, splitDiagnosticMessage } from "./autonomous-diagnostic-output"
+import { diagnosticSlackPost, isWaitingDiagnosticBluf, splitDiagnosticMessage } from "./autonomous-diagnostic-output"
 
 describe("autonomous diagnostic Slack envelope", () => {
   it("splits the BLUF root from one detail reply", () => {
@@ -8,6 +8,12 @@ describe("autonomous diagnostic Slack envelope", () => {
         bluf: "BLUF:\nNo human action flagged.",
         detail: "Context checked: launch evidence.",
       })
+  })
+
+  it("identifies d0 and context waiting roots so interim detail stays out of the thread", () => {
+    expect(isWaitingDiagnosticBluf("BLUF: Running\nStatus: WAITING_FOR_D0 · Last 72h")).toBe(true)
+    expect(isWaitingDiagnosticBluf("BLUF: Running\nStatus: WAITING_FOR_CONTEXT · Last 72h")).toBe(true)
+    expect(isWaitingDiagnosticBluf("BLUF: Done\nStatus: Partial · Last 72h")).toBe(false)
   })
 
   it("preserves markdown and multiline detail", () => {

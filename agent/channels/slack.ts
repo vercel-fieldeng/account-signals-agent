@@ -12,6 +12,7 @@ import { AutomationAdmissionError, classifyAutomationCommand } from '../../lib/s
 import { handleAutomationControl } from '../../lib/signals/automation-control';
 import {
   diagnosticSlackPost,
+  isWaitingDiagnosticBluf,
   splitDiagnosticMessage,
 } from '../../lib/signals/autonomous-diagnostic-output';
 import { isAutonomousSlackThreadRoot } from '../../lib/signals/slack-root';
@@ -101,7 +102,7 @@ export default slackChannel({
       }
       const rootUpdated = await updateDiagnosticRoot(ctx, diagnosticSlackPost(parts.bluf));
       if (!rootUpdated) await ctx.thread.post(diagnosticSlackPost(parts.bluf));
-      await ctx.thread.post(diagnosticSlackPost(parts.detail));
+      if (!isWaitingDiagnosticBluf(parts.bluf)) await ctx.thread.post(diagnosticSlackPost(parts.detail));
     },
   },
 });

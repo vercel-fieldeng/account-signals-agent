@@ -30,6 +30,10 @@ export function splitDiagnosticMessage(message: string): DiagnosticMessageParts 
   return { bluf, detail }
 }
 
+export function isWaitingDiagnosticBluf(bluf: string): boolean {
+  return /(?:^|\n)Status:\s*WAITING_FOR_(?:D0|CONTEXT)\b/u.test(bluf)
+}
+
 function plainText(value: string): string {
   return value
     .replace(/^BLUF:\s*/u, "")
