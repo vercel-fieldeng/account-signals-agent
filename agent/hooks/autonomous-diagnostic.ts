@@ -9,6 +9,11 @@ export function isTerminalDiagnosticMessage(finishReason: string | undefined): b
   return finishReason !== "tool-calls"
 }
 
+export function isPendingDiagnosticMessage(message: string | null | undefined): boolean {
+  if (!message) return false
+  return message.includes("Signal retrieval is still processing") || message.includes("No signal brief yet")
+}
+
 /**
  * Reconciles an accepted native diagnostic after its final answer or terminal
  * session event. This is intentionally idempotent and matches only the
@@ -29,7 +34,7 @@ export default defineHook({
     // Interactive Slack sessions enter waiting after a final answer rather than
     // emitting session.completed, so reconcile the final message as well.
     "message.completed": async (event, ctx) => {
-      if (!isTerminalDiagnosticMessage(event.data.finishReason)) return
+      if (!isTerminalDiagnosticMessage(event.data.finishReason) || isPendingDiagnosticMessage(event.data.message)) return
       await reconcile(ctx.session.id, "completed")
     },
     "session.completed": async (_event, ctx) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { isTerminalDiagnosticMessage } from "../../agent/hooks/autonomous-diagnostic"
+import { isPendingDiagnosticMessage, isTerminalDiagnosticMessage } from "../../agent/hooks/autonomous-diagnostic"
 
 describe("autonomous diagnostic lifecycle", () => {
   it("does not reconcile interim tool-call messages", () => {
@@ -9,5 +9,11 @@ describe("autonomous diagnostic lifecycle", () => {
   it("reconciles final and unspecified message completions", () => {
     expect(isTerminalDiagnosticMessage("stop")).toBe(true)
     expect(isTerminalDiagnosticMessage(undefined)).toBe(true)
+  })
+
+  it("keeps pending d0 messages resumable", () => {
+    expect(isPendingDiagnosticMessage("Signal retrieval is still processing")).toBe(true)
+    expect(isPendingDiagnosticMessage("No signal brief yet—retrieval is still processing")).toBe(true)
+    expect(isPendingDiagnosticMessage("Surfaced signals are complete")).toBe(false)
   })
 })
