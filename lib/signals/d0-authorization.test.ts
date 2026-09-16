@@ -192,11 +192,11 @@ describe("D0 authorization serialization", () => {
       "production",
     )
 
-    expect(AUTOMATION_CONNECTORS[1].uid).toBe(D0_CONNECTOR_UID)
-    expect(AUTOMATION_CONNECTORS[1].tokenParams()).toEqual(d0TokenParams())
-    expect(captured).toHaveLength(2)
+    expect(AUTOMATION_CONNECTORS[0].uid).toBe(D0_CONNECTOR_UID)
+    expect(AUTOMATION_CONNECTORS[0].tokenParams()).toEqual(d0TokenParams())
+    expect(captured).toHaveLength(1)
 
-    const auth = d0InteractiveAuth(captured[1])
+    const auth = d0InteractiveAuth(captured[0])
     const principal = userPrincipal("setup-definition")
     await auth.getToken({ principal, connection: connection() })
 

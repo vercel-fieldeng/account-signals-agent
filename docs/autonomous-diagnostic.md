@@ -18,8 +18,8 @@ The root `setup_automation` tool:
 
 1. Requires production execution, the verified operator, root context, and the trusted setup marker.
 2. Writes pending setup metadata only; no runnable job exists yet.
-3. Resolves Salesforce authorization, then d0 authorization, through Eve's normal interactive OAuth flow. The caller follows any real sign-in buttons in the setup thread. Authorization waits propagate unchanged so Eve can resume the same operation.
-4. Only after both Connect token resolutions succeed, atomically saves a ready owner binding and one job due five minutes later, rounded up to the next UTC minute.
+3. Resolves d0 authorization through Eve's normal interactive OAuth flow. The caller follows any real sign-in button in the setup thread. Authorization waits propagate unchanged so Eve can resume the same operation.
+4. Only after d0 token resolution succeeds, atomically saves a ready owner binding and one job due five minutes later, rounded up to the next UTC minute.
 
 If consent fails, the job remains unarmed. A duplicate tool call or webhook replay does not create a second job or move its due time. Pause during OAuth invalidates the setup ticket; delayed consent completion cannot re-enable it.
 
@@ -29,7 +29,7 @@ The setup thread reports the exact scheduled UTC time only after a successful co
 
 Persisted owner data contains only a stable verified user principal, issuer, authenticator, and minimal Slack identity/destination attributes. The setup marker is removed before persistence. OIDC tokens, access tokens, refresh tokens, cookies, and client secrets are never saved in the job state.
 
-Every due run revalidates both Connect grants with `forceRefresh: true`, using current runtime workload OIDC and the saved user subject. It does not change the connectors to app authentication. The scheduled Eve session receives that same verified user identity, while Slack delivery continues using the application's bot grant.
+Every due run revalidates the d0 Connect grant with `forceRefresh: true`, using current runtime workload OIDC and the saved user subject. Salesforce is not a runtime prerequisite. The scheduled Eve session receives that same verified user identity, while Slack delivery continues using the application's bot grant.
 
 All active d0 authorization paths use the shared `d0TokenParams()` policy: scope `d0:invoke` and resource `https://d0-web.vercel.tools/eve/v1/mcp`. This must apply consistently to initial consent, token retrieval/completion, and the native scheduler's grant check. The deployed d0 [authorization validator](https://github.com/vercel/internal-agents/blob/b1393f604a2a19ad8186bb12e0aeec8c896b348c/agents/d0/src/lib/mcp-oauth/requests.ts#L30-L53) rejects a missing or different resource with `invalid_target`. Inspected [Connect source](https://github.com/vercel/api/blob/e1ef01fe192b358deb8e64bc3292322cd5fe7856/packages/connex/src/client-types/oauth/client-driver.ts#L685-L722) does not infer that parameter from the connector URL. The Connect source SHA is an inspected repository revision, not a verified production-backend revision. Explicit resource binding is required regardless.
 
@@ -37,7 +37,7 @@ The shared d0 connector is also linked to DSEve. Do not change its client, secre
 
 A consent callback and Eve's “connected” banner are not proof that Connect subsequently obtained a usable token. A post-consent token-validation failure must remain a failure, not be reported as missing user consent. The corrected resource contract still requires a live, operator-authorized setup check; source inspection and mocked serialization tests do not establish that the original failed callback contained `invalid_target`.
 
-Read-only connector metadata checked on 2026-09-14 shows both existing Salesforce and d0 connectors support `user` subjects, have user authorization and refresh enabled, and are linked to production. That configuration is not proof that a particular user's provider refresh grant works end-to-end. A later autonomous invocation after token expiry is still required to prove renewal.
+Read-only connector metadata checked on 2026-09-14 shows the d0 connector supports `user` subjects, has user authorization and refresh enabled, and is linked to production. That configuration is not proof that a particular user's provider refresh grant works end-to-end. A later autonomous invocation after token expiry is still required to prove renewal.
 
 If a grant cannot be revalidated, the job is marked blocked and no agent starts. A fixed diagnostic notice is sent to the configured channel using the bot grant. It does not leak tokens, provider error payloads, or internal user IDs. If notification itself fails, state stays blocked and operator logs retain a safe failure stage.
 
@@ -69,13 +69,13 @@ The earlier app-principal diagnostic and its separate legacy ledger are left int
 
 ## Account/data scope
 
-The diagnostic asks d0 directly for Sam Maass's SE book using the exact semantic filter `sales_engineer_name = 'Sam Maass'`, not a bounded sample. The scheduler preflight validates the persisted operator's Salesforce and d0 grants; no Salesforce roster lookup is performed before d0. The d0 request is intentionally bounded to the last three days and asks for surfaced SE-book account intent signals, one row per account+signal with full detail and flip/fetch breakouts. The output must report the actual signal window, grain, freshness, completeness, source cap, and truncation, and the DETAIL reply must preserve exactly one row/card per returned signal with its full returned detail, timestamp, category/family, grain, and flip/fetch status; it must not infer consumption, adoption, or trends from intent signals alone. d0 is polled to terminal before bounded external context is requested; Salesforce context and `collect_external_signals` run only for at most three surfaced candidates. Hiring is reportable only from a successful careers result and first-observed postings are not proven new openings; LinkedIn remains unknown/partial-scope and is never scraped.
+The diagnostic asks d0 directly for up to ten recent surfaced intent-signal rows using the exact semantic filter `sales_engineer_name = 'Sam Maass'` and an exact rolling three-day UTC window. The scheduler preflight validates only the persisted operator's d0 grant. Salesforce roster lookup, `collect_external_signals`, careers, news, and web enrichment are intentionally excluded from this critical path. A completed d0 result must always produce a brief: at most three account cards in BLUF and every returned row in DETAIL, with timestamps, signal/person detail, category/grain, flip/fetch status, freshness/completeness, truncation, and a concrete next check. Missing CRM ownership is shown as not checked rather than suppressing d0 evidence.
 
 The account-selection requirement is still prompt policy, not a newly implemented deterministic account-authorization boundary. Do not claim otherwise. The scheduler does not read or write production signal baselines. The diagnostic prohibits baseline promotion, customer-system writes, shared exports, identity switching, and further schedules.
 
 ## Verification and rollout gates
 
-Focused tests cover operator admission, secret-free owner persistence, OAuth replay, production-only setup, grant sequencing, exact intent ordering, idempotent setup, pause races, concurrent claims, private storage failure, native dispatch, and error redaction.
+Focused tests cover operator admission, secret-free owner persistence, OAuth replay, production-only d0 setup, exact intent ordering, idempotent setup, pause races, concurrent claims, private storage failure, native dispatch, continuation, and error redaction.
 
 Before claiming end-to-end success:
 

@@ -64,16 +64,11 @@ describe("executeAutomationSetup", () => {
     expect(state.beginSetup).not.toHaveBeenCalled()
   })
 
-  it("resolves Salesforce before d0 and never completes after the first failure", async () => {
-    const order: string[] = []
-    const getToken = vi.fn(async () => {
-      order.push(order.length === 0 ? "salesforce" : "d0")
-      if (order.length === 1) return "sf-secret"
-      throw new Error("d0 unavailable")
-    })
+  it("requires only d0 and never completes when its grant fails", async () => {
+    const getToken = vi.fn(async () => { throw new Error("d0 unavailable") })
     const state = store()
     await expect(executeAutomationSetup(context({ getToken }), state, "production")).rejects.toThrow("d0 unavailable")
-    expect(order).toEqual(["salesforce", "d0"])
+    expect(getToken).toHaveBeenCalledTimes(1)
     expect(state.completeSetup).not.toHaveBeenCalled()
   })
 
@@ -85,7 +80,7 @@ describe("executeAutomationSetup", () => {
     expect(state.completeSetup).not.toHaveBeenCalled()
   })
 
-  it("completes once after both grants and returns no credentials or internal ids", async () => {
+  it("completes once after the d0 grant and returns no credentials or internal ids", async () => {
     const state = store()
     const output = await executeAutomationSetup(context(), state, "production")
     expect(output).toEqual(expect.objectContaining({ status: "scheduled", scheduledFor: dueAt }))

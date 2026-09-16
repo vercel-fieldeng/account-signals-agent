@@ -5,7 +5,6 @@ import { AutomationStateStore, type AutomationJob } from "./automation-state"
 import { D0_CONNECTOR_UID, d0TokenParams } from "./d0-authorization"
 
 export const AUTOMATION_CONNECTORS = [
-  { name: "Salesforce", uid: "api.salesforce.com/salesforce-mcp", tokenParams: () => ({}) },
   { name: "d0", uid: D0_CONNECTOR_UID, tokenParams: d0TokenParams },
 ] as const
 
@@ -34,7 +33,7 @@ function result(status: AutomationSetupResult["status"], scheduledFor: string): 
     message:
       status === "already_registered"
         ? "This setup request was already processed; no new job was scheduled. Consult automation status for the current job state. Source retrieval remains unverified."
-        : `Both provider grants resolved. Native diagnostic scheduledFor ${scheduledFor} UTC; consult automation status for the current job state. Source retrieval remains unverified.`,
+        : `d0 grant resolved. Native diagnostic scheduledFor ${scheduledFor} UTC; consult automation status for the current job state. Source retrieval remains unverified.`,
   }
 }
 
@@ -53,22 +52,15 @@ export async function executeAutomationSetup(
   const registration = await store.beginSetup(owner, requestId, requestedAt)
   if (registration.scheduledFor !== null) return result("already_registered", registration.scheduledFor)
 
-  // Deliberately resolve these grants in order. Auth-control exceptions must cross this boundary unchanged.
+  // d0 is the only required source. Auth-control exceptions must cross this boundary unchanged.
+  const connector = AUTOMATION_CONNECTORS[0]
   await ctx.getToken(connect({
-    connector: AUTOMATION_CONNECTORS[0].uid,
-    tokenParams: AUTOMATION_CONNECTORS[0].tokenParams(),
+    connector: connector.uid,
+    tokenParams: connector.tokenParams(),
     principalType: "user",
     autoProvision: false,
     validate: true,
-    displayName: AUTOMATION_CONNECTORS[0].name,
-  }))
-  await ctx.getToken(connect({
-    connector: AUTOMATION_CONNECTORS[1].uid,
-    tokenParams: AUTOMATION_CONNECTORS[1].tokenParams(),
-    principalType: "user",
-    autoProvision: false,
-    validate: true,
-    displayName: AUTOMATION_CONNECTORS[1].name,
+    displayName: connector.name,
   }))
 
   const job: AutomationJob = await store.completeSetup(registration.ticket)

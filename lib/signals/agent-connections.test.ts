@@ -30,7 +30,7 @@ describe("root d0 connection safeguards", () => {
       "Do not guess direct SQL",
       "Do not create schedules",
       "A browser-consent callback",
-      "Do not ask the user to repeat both sign-ins blindly",
+      "Do not ask the user to repeat sign-in blindly",
     ]) {
       expect(instructions).toContain(invariant)
     }

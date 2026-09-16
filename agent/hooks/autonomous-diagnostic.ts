@@ -11,7 +11,7 @@ export function isTerminalDiagnosticMessage(finishReason: string | undefined): b
 
 export function isPendingDiagnosticMessage(message: string | null | undefined): boolean {
   if (!message) return false
-  return message.includes("Signal retrieval is still processing") || message.includes("No signal brief yet")
+  return message.includes("Status: WAITING_FOR_D0") || message.includes("Signal retrieval is still processing") || message.includes("No signal brief yet")
 }
 
 /**

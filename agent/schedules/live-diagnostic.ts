@@ -16,7 +16,7 @@ const diagnosticInitialMessage = {
   fallbackText: "Account Signals — running\nRetrieving surfaced intent signals…",
 }
 
-const continuationPrompt = `Continue the existing autonomous diagnostic. Do not start a new d0 invocation and do not repeat roster discovery. Use the same d0 agent invocation handle from the previous turn and call agent_get until it reaches a terminal result, honoring every returned pollAfterMs. When d0 returns, produce the final BLUF/DETAIL response with the surfaced signal cards and AE/SA next steps. If the same invocation requires authorization, preserve it and report one concise business-facing blocker only.`
+const continuationPrompt = `Continue the existing d0 signal brief. Do not start another invocation or call Salesforce/external sources. Call agent_get on the existing d0 invocation handle and honor pollAfterMs. When it is terminal, return the required BLUF/DETAIL brief from its rows. If it is still running when this turn must end, return Status: WAITING_FOR_D0 with the required one-sentence update so the session remains resumable.`
 
 type SlackHistoryMessage = { ts?: unknown; bot_id?: unknown; subtype?: unknown; text?: unknown }
 
