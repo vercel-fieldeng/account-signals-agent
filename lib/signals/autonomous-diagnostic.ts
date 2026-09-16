@@ -14,7 +14,7 @@ export function diagnosticPrompt(now: Date): string {
 Run one read-only d0 query and turn its result into a concise Slack brief. Use the supplied user identity unchanged. Salesforce, public web research, careers, news, and external context are optional and must not delay or block the d0 result.
 
 Immediately call the root d0 connection in DISCOVER mode exactly once with this request:
-“Return up to 10 most recent surfaced account intent-signal rows where sales_engineer_name = 'Sam Maass' and signal time is in [${signalStart}, ${signalEnd}) UTC. Return account name, signal/person, timestamp, full signal detail, category or family, grain, flip count/detail, fetch count/detail, source freshness/completeness, and truncation. Do not perform Salesforce roster verification or external enrichment.”
+“Run the existing semantic alert ‘New intent signals — Sam Maass SE book’ for [${signalStart}, ${signalEnd}) UTC. Use surfaced signals only and return up to 10 rows, one per account and signal. Scope by the semantic assignment ‘SE = Sam Maass’; do not require a physical signal-table column named sales_engineer_name and do not ask for account IDs. Return account name, signal/person, timestamp, full signal detail, category or family, grain, flip count/detail, fetch count/detail, source freshness/completeness, and truncation.”
 
 Retain the invocation handle and poll that same invocation to terminal, honoring every pollAfterMs. Never restart it. Treat d0's applied filter and returned rows as the scope evidence; do not claim they prove the total size of the SE book. Do not invent accounts, owners, quantities, trends, or outreach routing.
 

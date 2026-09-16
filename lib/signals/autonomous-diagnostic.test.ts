@@ -182,8 +182,10 @@ describe("owner-bound autonomous diagnostic", () => {
   it("uses one bounded d0-only request and a useful result contract", () => {
     const prompt = diagnosticPrompt(new Date("2026-09-14T23:59:59.999Z"))
     expect(prompt).toContain("[2026-09-11T23:59:59.999Z, 2026-09-14T23:59:59.999Z)")
-    expect(prompt).toContain("sales_engineer_name = 'Sam Maass'")
-    expect(prompt).toContain("up to 10 most recent surfaced account intent-signal rows")
+    expect(prompt).toContain("New intent signals — Sam Maass SE book")
+    expect(prompt).toContain("SE = Sam Maass")
+    expect(prompt).toContain("do not require a physical signal-table column named sales_engineer_name")
+    expect(prompt).toContain("return up to 10 rows")
     expect(prompt).toContain("DISCOVER mode exactly once")
     expect(prompt).toContain("poll that same invocation to terminal")
     expect(prompt).toContain("Salesforce, public web research, careers, news, and external context are optional")
