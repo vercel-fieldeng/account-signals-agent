@@ -56,6 +56,19 @@ describe("automation controls", () => {
     expect(reconcileStaleDispatch).toHaveBeenCalledWith(expect.objectContaining({ channelId: AUTOMATION_CHANNEL_ID }))
   })
 
+  it("does not claim daily recurrence after recovering a paused handoff", async () => {
+    const recovered = state({ paused: true, setup: { requestId: "request", requestedAt: "2023-11-14T22:13:20.000Z", status: "cancelled" }, job: { id: "job", dueAt: "2023-11-14T22:18:20.000Z", status: "failed", acceptedSessionId: "session", terminalAt: "2023-11-14T22:30:20.000Z", failureCode: "session_stale" } })
+    const store = {
+      read: vi.fn(async () => recovered),
+      pause: vi.fn(async () => recovered),
+      reconcileStaleDispatch: vi.fn(async () => ({ reconciled: true, state: recovered })),
+    }
+    await expect(handleAutomationControl("recover automation", auth(), ts, store, "production")).resolves.toEqual({
+      kind: "reply",
+      text: expect.stringContaining("remains paused"),
+    })
+  })
+
   it("returns null for normal text without touching storage", async () => {
     const store = { read: vi.fn(async () => null), pause: vi.fn() }
     await expect(handleAutomationControl("hello", auth(), ts, store, "production")).resolves.toBeNull()
@@ -86,6 +99,7 @@ describe("automation controls", () => {
     expect(result.auth.attributes.unrelated).toBe("drop")
     expect(result.context).toHaveLength(1)
     expect(result.context[0]).toContain("Call setup_automation now")
+    expect(result.context[0]).toContain("08:00 Europe/Berlin")
     expect(store.read).not.toHaveBeenCalled()
     expect(store.pause).not.toHaveBeenCalled()
   })
@@ -100,6 +114,8 @@ describe("automation controls", () => {
 
   it("keeps status text safe for missing and every persisted job state", () => {
     expect(automationStatusText(null)).toContain("not configured")
+    expect(automationStatusText(state({ job: null }))).toContain("08:00 Europe/Berlin")
+    expect(automationStatusText(state({ job: { id: "job", dueAt: "2023-11-14T22:18:20.000Z", status: "completed", acceptedSessionId: "session", terminalAt: "2023-11-14T22:18:20.000Z" } }))).toContain("remains enabled")
     for (const jobStatus of ["scheduled", "checking", "dispatching", "dispatched", "completed", "failed", "blocked", "cancelled"] as const) {
       expect(automationStatusText(state({ job: {
         id: "job", dueAt: "2023-11-14T22:18:20.000Z", status: jobStatus,

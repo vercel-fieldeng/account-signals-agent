@@ -29,7 +29,9 @@ A dedicated **private Vercel Blob** store was provisioned in Frankfurt (`fra1`) 
 
 Retention is currently count-bounded; time-based retention/deletion and account offboarding must be implemented before storing routine customer history.
 
-## Enablement gates — not yet an enabled schedule
+## Enablement gates — full change monitor not yet enabled
+
+The owner-bound surfaced-intent diagnostic now has a code-wired daily 08:00 Europe/Berlin trigger with a one-local-day lookback between adjacent 08:00 schedule boundaries. It is not a substitute for the broader baseline-driven monitor specified above.
 
 - [ ] Verify one successful d0 request and saved-grant reuse under the intended schedule owner.
 - [ ] Bind the automation owner from a verified session and implement pause/revocation handling.
@@ -39,6 +41,7 @@ Retention is currently count-bounded; time-based retention/deletion and account 
 - [ ] Configure and validate Exa search credentials, account-domain scoping, attribution, and coverage limitations.
 - [ ] Connect live collectors and detectors to Blob-backed state and a durable delivery ledger.
 - [ ] Implement time-based retention and deletion of linked records.
-- [ ] Register the DST-correct 08:00 schedule, verify it in Vercel, and run a real end-to-end baseline/delta/retry test before enabling unattended delivery.
+- [x] Implement DST-correct once-per-Berlin-date arming in the native minute dispatcher.
+- [ ] Deploy it, verify the 08:00/catch-up arm and duplicate suppression in Vercel, and run a real end-to-end baseline/delta/retry test before calling the full monitor enabled.
 
 Do not enable a synthetic or generic morning briefing as a substitute for these requirements.

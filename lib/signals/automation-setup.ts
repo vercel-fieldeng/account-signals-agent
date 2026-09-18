@@ -32,8 +32,8 @@ function result(status: AutomationSetupResult["status"], scheduledFor: string): 
     scheduledFor,
     message:
       status === "already_registered"
-        ? "This setup request was already processed; no new job was scheduled. Consult automation status for the current job state. Source retrieval remains unverified."
-        : `d0 grant resolved. Native diagnostic scheduledFor ${scheduledFor} UTC; consult automation status for the current job state. Source retrieval remains unverified.`,
+        ? "This setup request was already processed; no new job was scheduled. Daily 08:00 Europe/Berlin automation remains registered. Consult automation status for the current job state. Source retrieval remains unverified."
+        : `d0 grant resolved. Initial diagnostic scheduledFor ${scheduledFor} UTC and daily 08:00 Europe/Berlin automation enabled; consult automation status for the current job state. Source retrieval remains unverified.`,
   }
 }
 

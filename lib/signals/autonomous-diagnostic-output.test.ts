@@ -11,9 +11,9 @@ describe("autonomous diagnostic Slack envelope", () => {
   })
 
   it("identifies d0 and context waiting roots so interim detail stays out of the thread", () => {
-    expect(isWaitingDiagnosticBluf("BLUF: Running\nStatus: WAITING_FOR_D0 · Last 72h")).toBe(true)
-    expect(isWaitingDiagnosticBluf("BLUF: Running\nStatus: WAITING_FOR_CONTEXT · Last 72h")).toBe(true)
-    expect(isWaitingDiagnosticBluf("BLUF: Done\nStatus: Partial · Last 72h")).toBe(false)
+    expect(isWaitingDiagnosticBluf("BLUF: Running\nStatus: WAITING_FOR_D0 · Last 1d")).toBe(true)
+    expect(isWaitingDiagnosticBluf("BLUF: Running\nStatus: WAITING_FOR_CONTEXT · Last 1d")).toBe(true)
+    expect(isWaitingDiagnosticBluf("BLUF: Done\nStatus: Partial · Last 1d")).toBe(false)
   })
 
   it("preserves markdown and multiline detail", () => {
@@ -39,7 +39,7 @@ describe("autonomous diagnostic Slack envelope", () => {
 
   it("renders dynamic enriched account cards with a divider", () => {
     const post = diagnosticSlackPost(
-      "BLUF: 2 accounts worth reviewing\nStatus: Complete · 72h · 4 signals · 2 accounts · Context 2/2\n*Account:* <https://example.test/personio|Personio>\n*Signal:* 3 signals · 2 RevOps signups + Head of RevOps webinar\n*Hypothesis:* Existing motion · RevOps may become an EAA pilot cohort. Confidence: High.\n*Contacts:* Christian Willems +2 · Route: Andru Dunn / James Arch\n*Next:* Validate whether RevOps is part of the internal-app initiative.\n*Account:* IQAir AG\n*Signal:* 1 signal · Web Tech Lead joined Agentic Shopify webinar\n*Hypothesis:* Existing motion · Adjacent to storefront and crawler-efficiency work. Confidence: Medium.\n*Contacts:* Ardit Dine · Route: Fay Lim\n*Next:* Ask whether the webinar maps to current storefront work.",
+      "BLUF: 2 accounts worth reviewing\nStatus: Complete · 1d · 4 signals · 2 accounts · Context 2/2\n*Account:* <https://example.test/personio|Personio>\n*Signal:* 3 signals · 2 RevOps signups + Head of RevOps webinar\n*Hypothesis:* Existing motion · RevOps may become an EAA pilot cohort. Confidence: High.\n*Contacts:* Christian Willems +2 · Route: Andru Dunn / James Arch\n*Next:* Validate whether RevOps is part of the internal-app initiative.\n*Account:* IQAir AG\n*Signal:* 1 signal · Web Tech Lead joined Agentic Shopify webinar\n*Hypothesis:* Existing motion · Adjacent to storefront and crawler-efficiency work. Confidence: Medium.\n*Contacts:* Ardit Dine · Route: Fay Lim\n*Next:* Ask whether the webinar maps to current storefront work.",
     )
     expect(post.blocks[0]).toEqual({
       type: "header",

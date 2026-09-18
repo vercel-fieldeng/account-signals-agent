@@ -272,6 +272,72 @@ describe("AutomationStateStore", () => {
     expect(armed).toMatchObject({ status: "scheduled", dueAt: at(7) })
   })
 
+  it("allows only one actual concurrent daily arm", async () => {
+    const state = fixture()
+    await ready(store(state))
+    const setupRun = store(state, new Date(baseTime.getTime() + 6 * 60_000))
+    const setupClaim = await setupRun.claimDue()
+    await setupRun.authorizeDispatch(setupClaim!)
+    await setupRun.markDispatched(setupClaim!, "session-before-daily-race")
+    await setupRun.reconcileSession("session-before-daily-race", "completed")
+
+    const raceState = fixture(state.body)
+    raceState.etag = state.etag
+    raceState.raceReads = true
+    const sharedSdk = sdk(raceState)
+    const now = new Date(baseTime.getTime() + 7 * 60_000)
+    const firstStore = new AutomationStateStore({ sdk: sharedSdk, storeId: "test-store", now: () => new Date(now) })
+    const secondStore = new AutomationStateStore({ sdk: sharedSdk, storeId: "test-store", now: () => new Date(now) })
+    const armed = await Promise.all([firstStore.armDaily("2026-09-14"), secondStore.armDaily("2026-09-14")])
+
+    expect(armed.filter(Boolean)).toHaveLength(1)
+    expect(await firstStore.read()).toMatchObject({ schemaVersion: 2, lastDailyDate: "2026-09-14", job: { id: "daily:2026-09-14", status: "scheduled" } })
+  })
+
+  it("arms each daily date once and preserves its marker across manual runs", async () => {
+    const state = fixture()
+    await ready(store(state))
+    expect(await store(state).armDaily("2026-09-14")).toBeNull()
+
+    const setupRun = store(state, new Date(baseTime.getTime() + 6 * 60_000))
+    const setupClaim = await setupRun.claimDue()
+    await setupRun.authorizeDispatch(setupClaim!)
+    await setupRun.markDispatched(setupClaim!, "session-setup")
+    await setupRun.reconcileSession("session-setup", "completed")
+
+    const dailyRun = store(state, new Date(baseTime.getTime() + 7 * 60_000))
+    expect(await dailyRun.armDaily("2026-09-14")).toMatchObject({ status: "scheduled", dueAt: at(7) })
+    expect(await dailyRun.read()).toMatchObject({ schemaVersion: 2, lastDailyDate: "2026-09-14" })
+    expect(await dailyRun.armDaily("2026-09-14")).toBeNull()
+
+    const dailyClaim = await dailyRun.claimDue()
+    await dailyRun.authorizeDispatch(dailyClaim!)
+    await dailyRun.markDispatched(dailyClaim!, "session-daily")
+    await dailyRun.reconcileSession("session-daily", "completed")
+
+    const manualRun = store(state, new Date(baseTime.getTime() + 8 * 60_000))
+    await manualRun.armImmediate("manual-after-daily")
+    const manualClaim = await manualRun.claimDue()
+    await manualRun.authorizeDispatch(manualClaim!)
+    await manualRun.markDispatched(manualClaim!, "session-manual")
+    await manualRun.reconcileSession("session-manual", "completed")
+
+    expect(await store(state, new Date(baseTime.getTime() + 9 * 60_000)).armDaily("2026-09-14")).toBeNull()
+    await expect(store(state, new Date("2026-09-15T08:00:00.000Z")).armDaily("2026-09-15"))
+      .resolves.toMatchObject({ status: "scheduled", dueAt: "2026-09-15T08:00:00.000Z" })
+  })
+
+  it("does not repeat an authorization-blocked run without a new setup", async () => {
+    const state = fixture()
+    await ready(store(state))
+    const dueStore = store(state, new Date(baseTime.getTime() + 6 * 60_000))
+    const claim = await dueStore.claimDue()
+    await dueStore.block(claim!, "d0_authorization_required")
+
+    expect(await store(state, new Date("2026-09-15T08:00:00.000Z")).armDaily("2026-09-15")).toBeNull()
+    expect((await store(state).read())?.lastDailyDate).toBeUndefined()
+  })
+
   it("records a terminal failure without accepting an arbitrary failure code", async () => {
     const state = fixture()
     await ready(store(state))
@@ -295,6 +361,19 @@ describe("AutomationStateStore", () => {
       state.body = JSON.stringify(persisted)
       await expect(current.read()).rejects.toThrow("Automation state is unavailable")
     }
+  })
+
+  it("rejects invalid daily calendar dates in requests and persisted state", async () => {
+    const state = fixture()
+    const current = store(state)
+    await ready(current)
+    await expect(current.armDaily("2026-02-30")).rejects.toThrow("Invalid daily automation date")
+
+    const persisted = JSON.parse(state.body!)
+    persisted.schemaVersion = 2
+    persisted.lastDailyDate = "2026-09-31"
+    state.body = JSON.stringify(persisted)
+    await expect(current.read()).rejects.toThrow("Automation state is unavailable")
   })
 
   it("fails closed for invalid metadata, missing ETags, oversized state, and failed writes", async () => {

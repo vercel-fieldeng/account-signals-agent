@@ -9,19 +9,20 @@ export type AutomationControlResult =
   | null
 
 export function automationStatusText(state: AutomationState | null): string {
-  if (!state) return "Automation is not configured. Send ‘setup automation’ mentioning the bot to authorize Salesforce and d0 and schedule one native diagnostic."
-  if (state.setup.status === "pending") return "Automation setup is pending. Complete the Salesforce/d0 sign-in steps in the setup thread. No diagnostic is armed."
-  if (state.paused) return "Automation is paused. Pending setup and scheduled/checking work are cancelled. Dispatch already committed may still start; accepted runs are not cancelled."
+  if (!state) return "Automation is not configured. Send ‘setup automation’ mentioning the bot to authorize d0, schedule an initial diagnostic, and enable daily 08:00 Europe/Berlin runs."
+  if (state.setup.status === "pending") return "Automation setup is pending. Complete the d0 sign-in step in the setup thread. No diagnostic is armed and daily runs are not enabled yet."
+  if (state.paused) return "Automation is paused. Daily arming and pending scheduled/checking work are disabled. Dispatch already committed may still start; accepted runs are not cancelled."
   const job = state.job
-  if (!job) return "No autonomous diagnostic is scheduled."
-  if (job.status === "scheduled") return `One native diagnostic is scheduled for ${job.dueAt} (UTC). Source retrieval is not yet verified.`
-  if (job.status === "checking") return "The native scheduler is validating the saved owner’s grants before starting the diagnostic."
-  if (job.status === "dispatching") return "Diagnostic dispatch was claimed. Its acceptance is not yet recorded; do not retry blindly."
+  if (!job) return "Daily 08:00 Europe/Berlin automation is enabled. No diagnostic is currently scheduled."
+  if (job.status === "scheduled") return `A diagnostic is scheduled for ${job.dueAt} (UTC). Daily 08:00 Europe/Berlin automation is enabled; source retrieval is not yet verified.`
+  if (job.status === "checking") return "The native scheduler is validating the saved owner’s grants before starting the diagnostic. Daily 08:00 Europe/Berlin automation is enabled."
+  if (job.status === "dispatching") return "Diagnostic dispatch was claimed. Its acceptance is not yet recorded; do not retry blindly. Daily automation remains enabled."
   if (job.status === "dispatched") return "The native scheduler accepted the diagnostic session, but its terminal result is not reconciled yet. Do not retry blindly; dispatch alone does not prove source retrieval or delivery. If this remains unchanged for at least 15 minutes, the authorized operator may send `recover automation` to mark the stale handoff failed."
-  if (job.status === "completed") return `The diagnostic completed at ${job.terminalAt ?? "an unrecorded time"}. Check its channel result; completion does not change the partial-scope limitations.`
-  if (job.status === "failed") return `The diagnostic reached a terminal failure (${job.failureCode ?? "unknown"}). No automatic retry is armed; inspect the run before sending a new setup request.`
-  if (job.status === "blocked") return `The diagnostic is blocked (${job.failureCode ?? "unknown"}). No automatic retry is armed. Send ‘setup automation’ to repair authorization and schedule one new test.`
-  return "The pending diagnostic was cancelled. No automatic retry is armed."
+  if (job.status === "completed") return `The diagnostic completed at ${job.terminalAt ?? "an unrecorded time"}. Daily 08:00 Europe/Berlin automation remains enabled; check the channel result.`
+  if (job.status === "failed") return `The diagnostic reached a terminal failure (${job.failureCode ?? "unknown"}). This job will not retry; daily automation will arm the next eligible Berlin date.`
+  if (job.status === "blocked" && job.failureCode?.endsWith("authorization_required")) return `The diagnostic is blocked (${job.failureCode}). Daily runs will remain blocked until ‘setup automation’ repairs authorization.`
+  if (job.status === "blocked") return `The diagnostic is blocked (${job.failureCode ?? "unknown"}). This job will not retry; daily automation will arm the next eligible Berlin date.`
+  return "The pending diagnostic was cancelled. Daily automation remains enabled and will arm the next eligible Berlin date."
 }
 
 export async function handleAutomationControl(
@@ -40,7 +41,7 @@ export async function handleAutomationControl(
     return {
       kind: "setup",
       auth: automationSetupAuth(auth!, messageTs),
-      context: ["This exact, authenticated setup command authorizes the setup_automation tool to bind this operator, complete Salesforce then d0 consent, and schedule ONE native diagnostic five minutes after both grants resolve. Call setup_automation now. Do not query customer data, delegate, create other schedules, or claim success before the tool confirms it. If OAuth pauses the tool, resume the same setup; do not start an unrelated data request."],
+      context: ["This exact, authenticated setup command authorizes the setup_automation tool to bind this operator, complete d0 consent, schedule one initial native diagnostic after five minutes, and enable one daily 08:00 Europe/Berlin diagnostic. Call setup_automation now. Do not query customer data, delegate, create other schedules, or claim success before the tool confirms it. If OAuth pauses the tool, resume the same setup; do not start an unrelated data request."],
     }
   }
   if (command === "pause") {
@@ -53,7 +54,9 @@ export async function handleAutomationControl(
     return {
       kind: "reply",
       text: result.reconciled
-        ? "The stale dispatched diagnostic was marked failed. No automatic retry was started; send `setup automation` when you are ready to schedule a new run."
+        ? result.state?.paused
+          ? "The stale dispatched diagnostic was marked failed. Automation remains paused; no daily run will arm until setup is completed again."
+          : "The stale dispatched diagnostic was marked failed. That job will not retry; daily automation remains enabled for the next eligible Berlin date."
         : automationStatusText(result.state),
     }
   }

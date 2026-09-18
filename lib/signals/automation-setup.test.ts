@@ -84,6 +84,7 @@ describe("executeAutomationSetup", () => {
     const state = store()
     const output = await executeAutomationSetup(context(), state, "production")
     expect(output).toEqual(expect.objectContaining({ status: "scheduled", scheduledFor: dueAt }))
+    expect(output.message).toContain("daily 08:00 Europe/Berlin automation enabled")
     expect(output).not.toHaveProperty("id")
     expect(JSON.stringify(output)).not.toContain("bearer-secret")
     expect(JSON.stringify(state)).not.toContain("bearer-secret")

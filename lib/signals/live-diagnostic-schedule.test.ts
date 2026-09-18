@@ -4,14 +4,26 @@ import { AUTOMATION_CHANNEL_ID, AUTOMATION_OPERATOR_USER_ID, AUTOMATION_WORKSPAC
 const channel = { name: "mock-slack" }
 const runner = vi.fn()
 const waits: Promise<unknown>[] = []
+const automationStore = vi.hoisted(() => ({
+  armDaily: vi.fn(async () => null),
+  read: vi.fn(async () => null),
+  claimContinuation: vi.fn(async () => null),
+}))
 
 vi.mock("eve/schedules", () => ({ defineSchedule: (definition: unknown) => definition }))
 vi.mock("../../agent/channels/slack", () => ({ default: channel }))
 vi.mock("./autonomous-diagnostic", () => ({
   runAutonomousDiagnostic: runner,
 }))
+vi.mock("./automation-state", () => ({
+  AutomationStateStore: class {
+    armDaily = automationStore.armDaily
+    read = automationStore.read
+    claimContinuation = automationStore.claimContinuation
+  },
+}))
 
-const { default: schedule, selectDiagnosticRootTs } = await import("../../agent/schedules/live-diagnostic")
+const { armDailyDiagnostic, default: schedule, selectDiagnosticRootTs } = await import("../../agent/schedules/live-diagnostic")
 type ScheduleArgs = Parameters<typeof schedule.run>[0]
 type TargetHandle = ReturnType<ScheduleArgs["to"]>
 type Session = Awaited<ReturnType<TargetHandle["send"]>>
@@ -31,12 +43,43 @@ const owner = {
 
 function reset() {
   runner.mockReset()
+  automationStore.armDaily.mockReset().mockResolvedValue(null)
+  automationStore.read.mockReset().mockResolvedValue(null)
+  automationStore.claimContinuation.mockReset().mockResolvedValue(null)
   waits.length = 0
 }
 
 describe("native owner-bound diagnostic schedule", () => {
   it("runs every minute", () => {
     expect(schedule.cron).toBe("* * * * *")
+  })
+
+  it("arms the due Berlin date and skips dates before 08:00", async () => {
+    const armDaily = vi.fn(async () => ({ id: "daily-job", dueAt: "2026-07-01T06:00:00.000Z", status: "scheduled" as const }))
+    await expect(armDailyDiagnostic({ armDaily }, new Date("2026-07-01T06:00:00.000Z"), "development")).resolves.toBeNull()
+    await expect(armDailyDiagnostic({ armDaily }, new Date("2026-07-01T05:59:59.999Z"), "production")).resolves.toBeNull()
+    expect(armDaily).not.toHaveBeenCalled()
+
+    await expect(armDailyDiagnostic({ armDaily }, new Date("2026-07-01T06:00:00.000Z"), "production")).resolves.toMatchObject({ id: "daily-job" })
+    expect(armDaily).toHaveBeenCalledWith("2026-07-01")
+  })
+
+  it("wires daily arming into the dispatcher before the diagnostic runner", async () => {
+    reset()
+    const order: string[] = []
+    automationStore.armDaily.mockImplementation(async () => { order.push("arm"); return null })
+    runner.mockImplementation(async () => { order.push("run"); return { kind: "idle" } })
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-07-01T06:00:00.000Z"))
+    vi.stubEnv("VERCEL_ENV", "production")
+    try {
+      await schedule.run({ to: vi.fn() as ScheduleArgs["to"], waitUntil: vi.fn(), appAuth })
+    } finally {
+      vi.unstubAllEnvs()
+      vi.useRealTimers()
+    }
+    expect(automationStore.armDaily).toHaveBeenCalledWith("2026-07-01")
+    expect(order).toEqual(["arm", "run"])
   })
 
   it("selects the latest root by verified app identity, independent of mutable text", () => {
@@ -60,6 +103,7 @@ describe("native owner-bound diagnostic schedule", () => {
     })
     const waitUntil = vi.fn((promise: Promise<unknown>) => { waits.push(promise) })
     const running = schedule.run({ to, waitUntil, appAuth })
+    await Promise.resolve()
     await Promise.resolve()
     expect(runner).toHaveBeenCalledWith(expect.objectContaining({ dispatch: expect.any(Function) }))
     expect(to).not.toHaveBeenCalled()

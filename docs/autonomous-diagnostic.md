@@ -1,6 +1,6 @@
 # Owner-bound native autonomous diagnostic
 
-`agent/schedules/live-diagnostic.ts` is a native Eve/Vercel cron dispatcher. It wakes once per minute but starts customer work only for a due, explicitly armed, one-off diagnostic. Missing state, pending authorization, paused work, and terminal/claimed jobs never cause another agent run. The morning monitoring schedule is not enabled.
+`agent/schedules/live-diagnostic.ts` is a native Eve/Vercel cron dispatcher. It wakes once per minute so it can resume pending work and atomically arm one diagnostic per Europe/Berlin calendar date once 08:00 local time is reached. This catch-up gate is DST-correct and suppresses duplicate daily runs across redeploys and later manual triggers. Missing owner state, pending authorization, paused work, and active claims do not start another agent run.
 
 ## One-time operator setup
 
@@ -19,7 +19,8 @@ The root `setup_automation` tool:
 1. Requires production execution, the verified operator, root context, and the trusted setup marker.
 2. Writes pending setup metadata only; no runnable job exists yet.
 3. Resolves d0 authorization through Eve's normal interactive OAuth flow. The caller follows any real sign-in button in the setup thread. Authorization waits propagate unchanged so Eve can resume the same operation.
-4. Only after d0 token resolution succeeds, atomically saves a ready owner binding and one job due five minutes later, rounded up to the next UTC minute.
+4. Only after d0 token resolution succeeds, atomically saves a ready owner binding and one initial job due five minutes later, rounded up to the next UTC minute.
+5. The minute dispatcher then reuses that owner binding to arm at most one run per Berlin date at or after 08:00 local time.
 
 If consent fails, the job remains unarmed. A duplicate tool call or webhook replay does not create a second job or move its due time. Pause during OAuth invalidates the setup ticket; delayed consent completion cannot re-enable it.
 
@@ -55,15 +56,15 @@ These exact mentions are handled deterministically, without a model turn:
 
 Controls require the same authenticated operator and production channel. Pause cancels pending setup and scheduled/checking jobs. Once dispatch is committed, the external handoff may still start; an accepted run is not cancelled and provider credentials are not revoked. Do not describe pause as stronger cancellation than this boundary.
 
-A new explicit setup command can repair authorization and create a new one-off test after a terminal job. It cannot replace a currently scheduled/checking/dispatching job. No automatic recurring collection is created.
+A new explicit setup command can repair authorization and create a new initial test after a terminal job. It cannot replace a currently scheduled/checking/dispatching job. Once setup is ready and unpaused, the dispatcher automatically arms the daily run; an authorization-blocked job requires setup repair before recurrence resumes.
 
 ## State and concurrency
 
-State is stored separately from production baselines at `account-signals/private/automation/control-v1.json`, using bounded private uncached reads and ETag-conditional writes. Setup readiness, pause, claim, and dispatch transitions share this single control record.
+State is stored separately from production baselines at `account-signals/private/automation/control-v1.json`, using bounded private uncached reads and ETag-conditional writes. Setup readiness, pause, the last armed Berlin calendar date, claim, and dispatch transitions share this single control record. Existing schema-v1 records without a daily-date marker remain readable and migrate to schema v2 on the first recurring arm. After that write, rollback must use a revision that can read schema v2; the previous schema-v1-only reader is not compatible.
 
 Slack intent timestamps retain microsecond precision so a newer pause cannot be discarded by millisecond truncation. Existing canonical three-digit ISO times remain readable. Unknown fields and malformed owner/job state fail closed.
 
-The scheduler atomically claims a due job as `checking`, verifies grants, and commits `dispatching` only if the claim is still current and unpaused. The accepted Eve session ID is recorded as `dispatched`; an Eve lifecycle hook reconciles it to `completed` after the final assistant message or to `failed` on a terminal session failure. `dispatched` therefore means accepted-but-unreconciled, not completed or delivered. Jobs more than fifteen minutes late become blocked rather than silently running stale work. Setup cannot replace an accepted diagnostic until that session is reconciled.
+At or after 08:00 Europe/Berlin, the scheduler atomically records that local date and creates a due job only if the owner is ready, unpaused, and has no active job. It then atomically claims the job as `checking`, verifies grants, and commits `dispatching` only if the claim is still current and unpaused. The accepted Eve session ID is recorded as `dispatched`; an Eve lifecycle hook reconciles it to `completed` after the final assistant message or to `failed` on a terminal session failure. `dispatched` therefore means accepted-but-unreconciled, not completed or delivered. Jobs more than fifteen minutes late become blocked rather than silently running stale work. Setup cannot replace an accepted diagnostic until that session is reconciled.
 
 This is at-most-once dispatch-attempt behavior, not exactly-once external delivery. A crash during checking/dispatching or between successful handoff and state recording can leave ambiguous work. Do not automatically retry that claim. Inspect telemetry before authorizing another attempt. A lifecycle-hook failure leaves the job `dispatched` for reconciliation rather than falsely marking it terminal.
 
@@ -71,20 +72,21 @@ The earlier app-principal diagnostic and its separate legacy ledger are left int
 
 ## Account/data scope
 
-The diagnostic asks d0 directly for up to ten recent surfaced intent-signal rows using the existing semantic alert `New intent signals — Sam Maass SE book`, scoped as `SE = Sam Maass`, and an exact rolling three-day UTC window. It explicitly does not require a physical source column named `sales_engineer_name`. The scheduler preflight validates only the persisted operator's d0 grant. After d0 returns, the agent uses the environment-authenticated Index MCP to enrich at most three surfaced accounts: verify meeting/account associations, retain returned Salesforce Account IDs, attempt one bounded `sfdc_lookup`, and read at most one relevant speaker-attributed transcript per account. Salesforce/Index failure lowers hypothesis confidence but never suppresses d0 rows. A completed result keeps the BLUF under 1,400 characters and each account card under 420 characters, using five single lines: Account, Signal, Hypothesis, Contacts, and Next. Context and Date are omitted from BLUF; Salesforce/Index evidence informs the hypothesis and moves to one compact Context line per account in DETAIL. Each hypothesis must combine d0 evidence with an attributable Salesforce or transcript fact and distinguish reinforcement of an existing motion from a possible new motion. DETAIL ends with one single-line coverage footer.
+Daily diagnostics ask d0 directly for up to ten recent surfaced intent-signal rows using the existing semantic alert `New intent signals — Sam Maass SE book`, scoped as `SE = Sam Maass`, and the previous 08:00-to-08:00 Europe/Berlin interval expressed as exact UTC boundaries. That interval is 23 or 25 hours across DST changes so adjacent daily runs do not overlap or leave gaps. Setup and manual diagnostics instead use a rolling 24-hour window ending at dispatch and may overlap daily coverage. It explicitly does not require a physical source column named `sales_engineer_name`. The scheduler preflight validates only the persisted operator's d0 grant. After d0 returns, the agent uses the environment-authenticated Index MCP to enrich at most three surfaced accounts: verify meeting/account associations, retain returned Salesforce Account IDs, attempt one bounded `sfdc_lookup`, and read at most one relevant speaker-attributed transcript per account. Salesforce/Index failure lowers hypothesis confidence but never suppresses d0 rows. A completed result keeps the BLUF under 1,400 characters and each account card under 420 characters, using five single lines: Account, Signal, Hypothesis, Contacts, and Next. Context and Date are omitted from BLUF; Salesforce/Index evidence informs the hypothesis and moves to one compact Context line per account in DETAIL. Each hypothesis must combine d0 evidence with an attributable Salesforce or transcript fact and distinguish reinforcement of an existing motion from a possible new motion. DETAIL ends with one single-line coverage footer.
 
 The account-selection requirement is still prompt policy, not a newly implemented deterministic account-authorization boundary. Do not claim otherwise. The scheduler does not read or write production signal baselines. The diagnostic prohibits baseline promotion, customer-system writes, shared exports, identity switching, and further schedules.
 
 ## Verification and rollout gates
 
-Focused tests cover operator admission, secret-free owner persistence, OAuth replay, production-only d0 setup, exact intent ordering, idempotent setup, pause races, concurrent claims, private storage failure, native dispatch, continuation, and error redaction.
+Focused tests cover operator admission, secret-free owner persistence, OAuth replay, production-only d0 setup, Berlin DST boundaries, once-per-date daily arming, pause races, concurrent claims, private storage failure, native dispatch, continuation, and error redaction.
 
 Before claiming end-to-end success:
 
 1. Verify the production deployment is Ready and `vercel cron list` shows the minute dispatcher.
 2. Complete the real operator setup; record its scheduled time without copying authorization links or credentials into docs.
-3. Verify the cron request's logs link to an accepted Eve session and the channel receives its actual result. Agent Runs may label the destination channel as Slack; use cron request logs to establish the trigger.
-4. Verify source evidence and account scope separately from token issuance.
-5. Run another explicitly authorized diagnostic after token expiry to prove refresh without another sign-in.
+3. After deployment, verify a log entry for `autonomous_diagnostic.daily_armed` at 08:00 Europe/Berlin (or catch-up after deployment) and confirm the same Berlin date is not armed twice.
+4. Verify the cron request's logs link to an accepted Eve session and the channel receives its actual result. Agent Runs may label the destination channel as Slack; use cron request logs to establish the trigger.
+5. Verify source evidence and account scope separately from token issuance.
+6. Verify a later daily run after token expiry refreshes without another sign-in.
 
 A passing unit test, a ready connector, a successful token request, and a dispatched state are not substitutes for these live checks.

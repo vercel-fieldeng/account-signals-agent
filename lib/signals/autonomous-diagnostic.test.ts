@@ -109,6 +109,18 @@ describe("owner-bound autonomous diagnostic", () => {
     expect(state.markDispatched).toHaveBeenCalledWith(expect.anything(), "accepted")
   })
 
+  it("uses the daily job date for DST-safe adjacent schedule boundaries", async () => {
+    const dailyClaim = claim()
+    dailyClaim.job.id = "daily:2026-10-25"
+    const dispatch = vi.fn(async () => ({ id: "daily-session" }))
+    await runAutonomousDiagnostic(options({
+      now: () => new Date("2026-10-25T12:00:00.000Z"),
+      store: store({ claimDue: async () => dailyClaim }),
+      dispatch,
+    }))
+    expect(dispatch).toHaveBeenCalledWith(owner, expect.stringContaining("[2026-10-24T06:00:00.000Z, 2026-10-25T07:00:00.000Z)"))
+  })
+
   it("checks only d0 with the stable user subject and forceRefresh, without exposing tokens", async () => {
     const getToken = tokenGetter()
     const state = store()
@@ -181,7 +193,9 @@ describe("owner-bound autonomous diagnostic", () => {
 
   it("uses one d0 request followed by bounded optional Salesforce and Index enrichment", () => {
     const prompt = diagnosticPrompt(new Date("2026-09-14T23:59:59.999Z"))
-    expect(prompt).toContain("[2026-09-11T23:59:59.999Z, 2026-09-14T23:59:59.999Z)")
+    expect(prompt).toContain("[2026-09-13T23:59:59.999Z, 2026-09-14T23:59:59.999Z)")
+    expect(prompt).toContain("No surfaced intent in the last day")
+    expect(prompt).toContain("· 1d ·")
     expect(prompt).toContain("New intent signals — Sam Maass SE book")
     expect(prompt).toContain("SE = Sam Maass")
     expect(prompt).toContain("return up to 10 rows")
@@ -207,5 +221,8 @@ describe("owner-bound autonomous diagnostic", () => {
     expect(prompt).toContain("*Coverage:*")
     expect(prompt).not.toContain("After the Salesforce roster is verified")
     expect(prompt).not.toContain("full requested SE book")
+
+    const dstPrompt = diagnosticPrompt(new Date("2026-10-25T12:00:00.000Z"), "2026-10-25")
+    expect(dstPrompt).toContain("[2026-10-24T06:00:00.000Z, 2026-10-25T07:00:00.000Z)")
   })
 })

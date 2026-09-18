@@ -33,12 +33,13 @@ export type ClaimedAutomationJob = {
   generation: number
 }
 export type AutomationState = {
-  schemaVersion: 1
+  schemaVersion: 1 | 2
   owner: AutomationOwner
   paused: boolean
   generation: number
   updatedAt: string
   lastIntentAt: string
+  lastDailyDate?: string
   setup: {
     requestId: string
     requestedAt: string
@@ -79,6 +80,12 @@ function intentMicros(value: unknown): bigint | null {
 
 function safeDate(value: unknown): value is string {
   return intentMicros(value) !== null
+}
+
+function safeCalendarDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = Date.parse(`${value}T00:00:00.000Z`)
+  return Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === value
 }
 
 function validPersistedOwner(value: unknown): value is AutomationOwner {
@@ -146,10 +153,11 @@ function validJob(value: unknown): value is AutomationJob {
 }
 
 function validState(value: unknown): value is AutomationState {
+  if (!record(value) || (value.schemaVersion !== 1 && value.schemaVersion !== 2)) return false
+  const stateKeys = ["schemaVersion", "owner", "paused", "generation", "updatedAt", "lastIntentAt", "setup", "job"]
+  if (value.schemaVersion === 2) stateKeys.push("lastDailyDate")
   if (
-    !record(value) ||
-    !exactKeys(value, ["schemaVersion", "owner", "paused", "generation", "updatedAt", "lastIntentAt", "setup", "job"]) ||
-    value.schemaVersion !== 1 ||
+    !exactKeys(value, stateKeys) ||
     !validPersistedOwner(value.owner) ||
     typeof value.paused !== "boolean" ||
     typeof value.generation !== "number" ||
@@ -157,6 +165,7 @@ function validState(value: unknown): value is AutomationState {
     value.generation < 1 ||
     !safeDate(value.updatedAt) ||
     !safeDate(value.lastIntentAt) ||
+    (value.schemaVersion === 2 && !safeCalendarDate(value.lastDailyDate)) ||
     !record(value.setup) ||
     (value.job !== null && !validJob(value.job))
   ) return false
@@ -242,7 +251,7 @@ export class AutomationStateStore {
 
       const generation = current.generation + 1
       return {
-        state: this.pending(owner, requestId, requestedAt, generation, now),
+        state: this.pending(owner, requestId, requestedAt, generation, now, current.lastDailyDate),
         result: { ticket: { requestId, generation }, scheduledFor: null },
       }
     })
@@ -297,6 +306,40 @@ export class AutomationStateStore {
           updatedAt: now,
           lastIntentAt: now,
           setup: { ...current.setup, status: "ready" },
+          job,
+        },
+        result: job,
+      }
+    })
+  }
+
+  /** Arms at most one recurring diagnostic for a canonical local calendar date. */
+  async armDaily(dailyDate: string): Promise<AutomationJob | null> {
+    if (!safeCalendarDate(dailyDate)) fail("Invalid daily automation date")
+
+    return this.mutate((current) => {
+      if (!current || current.paused || current.setup.status !== "ready") {
+        return { state: current, result: null }
+      }
+      if (current.lastDailyDate && dailyDate <= current.lastDailyDate) {
+        return { state: current, result: null }
+      }
+      if (current.job && ["scheduled", "checking", "dispatching", "dispatched"].includes(current.job.status)) {
+        return { state: current, result: null }
+      }
+      if (current.job?.status === "blocked" && current.job.failureCode?.endsWith("authorization_required")) {
+        return { state: current, result: null }
+      }
+
+      const now = this.clock().toISOString()
+      const job: AutomationJob = { id: `daily:${dailyDate}`, dueAt: now, status: "scheduled" }
+      return {
+        state: {
+          ...current,
+          schemaVersion: 2,
+          generation: current.generation + 1,
+          updatedAt: now,
+          lastDailyDate: dailyDate,
           job,
         },
         result: job,
@@ -499,14 +542,22 @@ export class AutomationStateStore {
     }
   }
 
-  private pending(owner: AutomationOwner, requestId: string, requestedAt: string, generation: number, now: string): AutomationState {
+  private pending(
+    owner: AutomationOwner,
+    requestId: string,
+    requestedAt: string,
+    generation: number,
+    now: string,
+    lastDailyDate?: string,
+  ): AutomationState {
     return {
-      schemaVersion: 1,
+      schemaVersion: lastDailyDate ? 2 : 1,
       owner,
       paused: true,
       generation,
       updatedAt: now,
       lastIntentAt: requestedAt,
+      ...(lastDailyDate ? { lastDailyDate } : {}),
       setup: { requestId, requestedAt, status: "pending" },
       job: null,
     }

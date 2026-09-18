@@ -2,13 +2,15 @@ import { getToken, NoValidTokenError, UserAuthorizationRequiredError } from "@ve
 import { AUTOMATION_CONNECTORS } from "./automation-setup"
 import { AUTOMATION_CHANNEL_ID, validateAutomationOwner, type AutomationOwner } from "./automation-policy"
 import { AutomationStateStore } from "./automation-state"
+import { dailyScheduleWindow } from "./daily-schedule"
 
 const DAY = 86_400_000
 
-export function diagnosticPrompt(now: Date): string {
+export function diagnosticPrompt(now: Date, dailyDate?: string): string {
   if (!Number.isFinite(now.getTime())) throw new Error("Invalid diagnostic clock")
-  const signalEnd = now.toISOString()
-  const signalStart = new Date(now.getTime() - 3 * DAY).toISOString()
+  const window = dailyDate ? dailyScheduleWindow(dailyDate) : { start: new Date(now.getTime() - DAY), end: now }
+  const signalEnd = window.end.toISOString()
+  const signalStart = window.start.toISOString()
   return `AUTONOMOUS D0 SIGNAL BRIEF
 
 Run one read-only d0 query and turn its result into a concise Slack brief. Use the supplied user identity unchanged. Salesforce, public web research, careers, news, and external context are optional and must not delay or block the d0 result.
@@ -27,8 +29,8 @@ For each account, synthesize the signal with current CRM motion and customer-sta
 The channel root is a scan, not a report. Keep the entire BLUF under 1,400 characters and each account card under 420 characters. Every field must be exactly one short line. Remove filler, repeated evidence, full meeting summaries, dates, and generic caveats from BLUF; retain them in DETAIL. In Contacts, name the strongest signal actor, summarize additional actors as “+N”, and name at most two existing-motion stakeholders after “Route:”.
 
 Output exactly in Slack-compatible mrkdwn:
-BLUF: <dynamic outcome headline: “N accounts worth reviewing”, “No surfaced intent in the last 72h”, “Signal retrieval still running”, “Context enrichment still running”, or “Signal brief needs attention”>
-Status: <Complete, Partial, Blocked, WAITING_FOR_D0, or WAITING_FOR_CONTEXT> · 72h · <N signals> · <N accounts> · Context <N/N or partial>
+BLUF: <dynamic outcome headline: “N accounts worth reviewing”, “No surfaced intent in the last day”, “Signal retrieval still running”, “Context enrichment still running”, or “Signal brief needs attention”>
+Status: <Complete, Partial, Blocked, WAITING_FOR_D0, or WAITING_FOR_CONTEXT> · 1d · <N signals> · <N accounts> · Context <N/N or partial>
 
 *Account:* <Salesforce link if verified, otherwise account name>
 *Signal:* <max 110 characters; count + compact event/person summary>
@@ -113,7 +115,8 @@ export async function runAutonomousDiagnostic(options: DiagnosticRunnerOptions):
     // A pause during the grant checks invalidates the claim before any agent starts.
     if (!await store.authorizeDispatch(claim)) return { kind: "cancelled" }
     stage = "handoff"
-    const session = await options.dispatch(owner, diagnosticPrompt(now()))
+    const dailyDate = /^daily:(\d{4}-\d{2}-\d{2})$/.exec(claim.job.id)?.[1]
+    const session = await options.dispatch(owner, diagnosticPrompt(now(), dailyDate))
     if (!session || typeof session.id !== "string" || !session.id) throw new Error("Missing session")
     log("handoff_accepted", { jobId: claim.job.id, sessionId: session.id })
     stage = "record_handoff"
@@ -129,7 +132,7 @@ export async function runAutonomousDiagnostic(options: DiagnosticRunnerOptions):
 
 export async function postAutomationBlockedMessage(code: string): Promise<void> {
   const source = code.startsWith("salesforce_") ? "Salesforce" : "d0"
-  const text = `Autonomous diagnostic blocked before customer-data retrieval: ${source} authorization could not be validated. No agent run was started. Send “setup automation” mentioning this bot from the authorized operator account to repair authorization and schedule a new one-off test. Use “automation status” to inspect or “pause automation” to disable pending work.`
+  const text = `Autonomous diagnostic blocked before customer-data retrieval: ${source} authorization could not be validated. No agent run was started. Send “setup automation” mentioning this bot from the authorized operator account to repair authorization, schedule a recovery check, and restore daily runs. Use “automation status” to inspect or “pause automation” to disable pending work.`
   try {
     const token = await getToken("slack/account-signals-slack", { subject: { type: "app" } })
     const response = await fetch("https://slack.com/api/chat.postMessage", {

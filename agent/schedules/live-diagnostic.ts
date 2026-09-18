@@ -4,6 +4,7 @@ import slack from "../channels/slack"
 import { runAutonomousDiagnostic } from "../../lib/signals/autonomous-diagnostic"
 import { type AutomationOwner } from "../../lib/signals/automation-policy"
 import { AutomationStateStore, type AutomationJob } from "../../lib/signals/automation-state"
+import { dueDailyScheduleDate } from "../../lib/signals/daily-schedule"
 
 const diagnosticInitialMessage = {
   // Eve's Chat SDK CardElement is structurally represented here so the
@@ -74,34 +75,54 @@ async function continuePendingDiagnostic(
   }))
 }
 
-// The dispatcher starts a due, explicitly authorized one-off job. If the
-// previous Eve turn ended while d0 was pending, it resumes the same Slack
-// session instead of starting a new d0 invocation.
+type DailyStore = Pick<AutomationStateStore, "armDaily">
+
+export async function armDailyDiagnostic(
+  store: DailyStore,
+  now: Date,
+  vercelEnv: string | undefined = process.env.VERCEL_ENV,
+): Promise<AutomationJob | null> {
+  if (vercelEnv !== "production") return null
+  const dailyDate = dueDailyScheduleDate(now)
+  if (!dailyDate) return null
+  return store.armDaily(dailyDate)
+}
+
+// The minute dispatcher atomically arms one run per Berlin calendar date once
+// 08:00 is reached, services explicit one-off jobs, and resumes pending turns.
 export default defineSchedule({
   cron: "* * * * *",
   async run({ to, waitUntil }) {
-    const diagnostic = runAutonomousDiagnostic({
-      dispatch: (owner, prompt) => to(slack, {
-        channelId: owner.channelId,
-        installationTeamId: owner.installationTeamId,
-        initialMessage: diagnosticInitialMessage,
-      }).send(prompt, { auth: owner.auth }),
-    })
-
     const store = new AutomationStateStore()
-    const continuation = (async () => {
-      try {
-        const state = await store.read()
-        if (state?.job?.status === "dispatched" && state.job.acceptedSessionId) {
-          const claimed = await store.claimContinuation(state.job.acceptedSessionId)
-          if (claimed) await continuePendingDiagnostic(to, waitUntil, claimed.owner, claimed.job)
-        }
-      } catch (error) {
-        console.warn(`autonomous_diagnostic.continuation_state_unavailable: ${error instanceof Error ? error.message : "unknown"}`)
+    const work = (async () => {
+      const armed = await armDailyDiagnostic(store, new Date())
+      if (armed) {
+        console.info(JSON.stringify({ event: "autonomous_diagnostic.daily_armed", jobId: armed.id, dueAt: armed.dueAt }))
       }
-    })()
 
-    const work = Promise.all([continuation, diagnostic]).then(([, result]) => result)
+      const diagnostic = runAutonomousDiagnostic({
+        store,
+        dispatch: (owner, prompt) => to(slack, {
+          channelId: owner.channelId,
+          installationTeamId: owner.installationTeamId,
+          initialMessage: diagnosticInitialMessage,
+        }).send(prompt, { auth: owner.auth }),
+      })
+
+      const continuation = (async () => {
+        try {
+          const state = await store.read()
+          if (state?.job?.status === "dispatched" && state.job.acceptedSessionId) {
+            const claimed = await store.claimContinuation(state.job.acceptedSessionId)
+            if (claimed) await continuePendingDiagnostic(to, waitUntil, claimed.owner, claimed.job)
+          }
+        } catch (error) {
+          console.warn(`autonomous_diagnostic.continuation_state_unavailable: ${error instanceof Error ? error.message : "unknown"}`)
+        }
+      })()
+
+      return Promise.all([continuation, diagnostic]).then(([, result]) => result)
+    })()
     waitUntil(work)
     await work
   },
