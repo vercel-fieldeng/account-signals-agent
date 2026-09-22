@@ -72,3 +72,12 @@ export function dailyScheduleWindow(dailyDate: string): { start: Date; end: Date
     end: berlinScheduleBoundary(dailyDate),
   }
 }
+
+/** Returns the previous complete UTC day for a date-grained signal source. */
+export function dailySignalWindow(dailyDate: string): { start: Date; end: Date } {
+  if (!calendarDate(dailyDate)) throw new Error("Invalid daily signal date")
+  return {
+    start: new Date(`${shiftCalendarDate(dailyDate, -1)}T00:00:00.000Z`),
+    end: new Date(`${dailyDate}T00:00:00.000Z`),
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { dailyScheduleWindow, dueDailyScheduleDate } from "./daily-schedule"
+import { dailyScheduleWindow, dailySignalWindow, dueDailyScheduleDate } from "./daily-schedule"
 
 describe("Berlin daily schedule", () => {
   it("becomes due at 08:00 Europe/Berlin in summer time", () => {
@@ -23,8 +23,24 @@ describe("Berlin daily schedule", () => {
     expect(autumn.end.toISOString()).toBe("2026-10-25T07:00:00.000Z")
   })
 
+  it("uses the previous complete UTC day for date-grained signals, including across DST", () => {
+    expect(dailySignalWindow("2026-09-22")).toEqual({
+      start: new Date("2026-09-21T00:00:00.000Z"),
+      end: new Date("2026-09-22T00:00:00.000Z"),
+    })
+    expect(dailySignalWindow("2026-03-29")).toEqual({
+      start: new Date("2026-03-28T00:00:00.000Z"),
+      end: new Date("2026-03-29T00:00:00.000Z"),
+    })
+    expect(dailySignalWindow("2026-10-25")).toEqual({
+      start: new Date("2026-10-24T00:00:00.000Z"),
+      end: new Date("2026-10-25T00:00:00.000Z"),
+    })
+  })
+
   it("rejects invalid clocks and calendar dates", () => {
     expect(() => dueDailyScheduleDate(new Date("invalid"))).toThrow("Invalid daily schedule clock")
     expect(() => dailyScheduleWindow("2026-02-30")).toThrow("Invalid daily schedule date")
+    expect(() => dailySignalWindow("2026-02-30")).toThrow("Invalid daily signal date")
   })
 })

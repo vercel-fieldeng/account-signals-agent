@@ -2,13 +2,12 @@ import { getToken, NoValidTokenError, UserAuthorizationRequiredError } from "@ve
 import { AUTOMATION_CONNECTORS } from "./automation-setup"
 import { AUTOMATION_CHANNEL_ID, validateAutomationOwner, type AutomationOwner } from "./automation-policy"
 import { AutomationStateStore } from "./automation-state"
-import { dailyScheduleWindow } from "./daily-schedule"
-
-const DAY = 86_400_000
+import { dailySignalWindow } from "./daily-schedule"
 
 export function diagnosticPrompt(now: Date, dailyDate?: string): string {
   if (!Number.isFinite(now.getTime())) throw new Error("Invalid diagnostic clock")
-  const window = dailyDate ? dailyScheduleWindow(dailyDate) : { start: new Date(now.getTime() - DAY), end: now }
+  const signalDate = dailyDate ?? now.toISOString().slice(0, 10)
+  const window = dailySignalWindow(signalDate)
   const signalEnd = window.end.toISOString()
   const signalStart = window.start.toISOString()
   return `AUTONOMOUS D0 SIGNAL BRIEF
@@ -16,9 +15,9 @@ export function diagnosticPrompt(now: Date, dailyDate?: string): string {
 Run one read-only d0 query and turn its result into a concise Slack brief. Use the supplied user identity unchanged. Salesforce, public web research, careers, news, and external context are optional and must not delay or block the d0 result.
 
 Immediately call the root d0 connection in DISCOVER mode exactly once with this request:
-“Run the existing semantic alert ‘New intent signals — Sam Maass SE book’ for [${signalStart}, ${signalEnd}) UTC. Use surfaced signals only and return up to 10 rows, one per account and signal. Scope by the semantic assignment ‘SE = Sam Maass’; do not require a physical signal-table column named sales_engineer_name and do not ask for account IDs. Return account name, signal/person, timestamp, full signal detail, category or family, grain, flip count/detail, fetch count/detail, source freshness/completeness, and truncation.”
+“Run the existing semantic alert ‘New intent signals — Sam Maass SE book’ for the previous complete UTC calendar day [${signalStart}, ${signalEnd}). The source's signal timestamps are date-grained at 00:00 UTC: apply these exact half-open midnight boundaries and do not substitute a rolling or Berlin-local window. Use surfaced signals only and return up to 10 rows, one per account and signal. Scope by the semantic assignment ‘SE = Sam Maass’; do not require a physical signal-table column named sales_engineer_name and do not ask for account IDs. Return account name, signal/person, timestamp, full signal detail, category or family, grain, flip count/detail, fetch count/detail, source freshness/completeness, and truncation.”
 
-Retain the invocation handle and poll that same invocation to terminal, honoring every pollAfterMs. Never restart it. Treat d0's applied filter and returned rows as the scope evidence; do not claim they prove the total size of the SE book. Do not invent accounts, owners, quantities, trends, or outreach routing.
+Retain the invocation handle and poll that same invocation to terminal, honoring every pollAfterMs. Never restart it. Treat d0's applied filter and returned rows as the scope evidence; do not claim they prove the total size of the SE book. A zero-row result is Complete only when d0 confirms this UTC day is settled and the result is untruncated; otherwise report Partial and identify freshness as unresolved. Do not invent accounts, owners, quantities, trends, or outreach routing.
 
 When d0 completes, select at most three returned accounts for context enrichment. For each selected account, use the root Index connection: search up to three recent meetings across all accessible capture sources using the exact account name, verify the returned account association, retain its 18-character Salesforce Account ID, and call sfdc_lookup once for current Salesforce account/activity context. Choose the meeting most relevant to the surfaced signal and retrieve at most one speaker-attributed transcript per account. Use a bounded 0–3600 second transcript window and cite the returned Index deep link. Do not use recaps alone as customer evidence.
 

@@ -109,7 +109,7 @@ describe("owner-bound autonomous diagnostic", () => {
     expect(state.markDispatched).toHaveBeenCalledWith(expect.anything(), "accepted")
   })
 
-  it("uses the daily job date for DST-safe adjacent schedule boundaries", async () => {
+  it("uses the daily job date for the previous complete UTC signal day across DST", async () => {
     const dailyClaim = claim()
     dailyClaim.job.id = "daily:2026-10-25"
     const dispatch = vi.fn(async () => ({ id: "daily-session" }))
@@ -118,7 +118,7 @@ describe("owner-bound autonomous diagnostic", () => {
       store: store({ claimDue: async () => dailyClaim }),
       dispatch,
     }))
-    expect(dispatch).toHaveBeenCalledWith(owner, expect.stringContaining("[2026-10-24T06:00:00.000Z, 2026-10-25T07:00:00.000Z)"))
+    expect(dispatch).toHaveBeenCalledWith(owner, expect.stringContaining("[2026-10-24T00:00:00.000Z, 2026-10-25T00:00:00.000Z)"))
   })
 
   it("checks only d0 with the stable user subject and forceRefresh, without exposing tokens", async () => {
@@ -193,7 +193,9 @@ describe("owner-bound autonomous diagnostic", () => {
 
   it("uses one d0 request followed by bounded optional Salesforce and Index enrichment", () => {
     const prompt = diagnosticPrompt(new Date("2026-09-14T23:59:59.999Z"))
-    expect(prompt).toContain("[2026-09-13T23:59:59.999Z, 2026-09-14T23:59:59.999Z)")
+    expect(prompt).toContain("[2026-09-13T00:00:00.000Z, 2026-09-14T00:00:00.000Z)")
+    expect(prompt).toContain("date-grained at 00:00 UTC")
+    expect(prompt).toContain("A zero-row result is Complete only when d0 confirms this UTC day is settled")
     expect(prompt).toContain("No surfaced intent in the last day")
     expect(prompt).toContain("· 1d ·")
     expect(prompt).toContain("New intent signals — Sam Maass SE book")
@@ -223,6 +225,6 @@ describe("owner-bound autonomous diagnostic", () => {
     expect(prompt).not.toContain("full requested SE book")
 
     const dstPrompt = diagnosticPrompt(new Date("2026-10-25T12:00:00.000Z"), "2026-10-25")
-    expect(dstPrompt).toContain("[2026-10-24T06:00:00.000Z, 2026-10-25T07:00:00.000Z)")
+    expect(dstPrompt).toContain("[2026-10-24T00:00:00.000Z, 2026-10-25T00:00:00.000Z)")
   })
 })
