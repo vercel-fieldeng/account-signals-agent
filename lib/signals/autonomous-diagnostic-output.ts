@@ -30,6 +30,36 @@ export function splitDiagnosticMessage(message: string): DiagnosticMessageParts 
   return { bluf, detail }
 }
 
+const REPORTED_IDS_LINE = /^\s*\**Reported signal IDs:\**\s*(.*)$/u
+const REPORTED_ID = /^[^\s,<>`*|]{1,128}$/u
+
+/**
+ * The daily brief ends with a machine-readable list of delivered signal IDs.
+ * Remove it from the Slack-visible message and return the valid IDs so the
+ * channel can record them only after Slack accepts the post.
+ */
+export function extractReportedSignalIds(message: string): { message: string; ids: string[] } {
+  const ids: string[] = []
+  const kept: string[] = []
+  for (const line of message.split("\n")) {
+    const match = REPORTED_IDS_LINE.exec(line)
+    if (!match) {
+      kept.push(line)
+      continue
+    }
+    for (const token of match[1].split(/[,\s]+/u)) {
+      const id = token.replace(/^`|`$/gu, "").trim()
+      if (id && id.toLowerCase() !== "none" && REPORTED_ID.test(id)) ids.push(id)
+    }
+  }
+  return { message: kept.join("\n").trimEnd(), ids: [...new Set(ids)] }
+}
+
+/** Only a finished brief (Complete or Partial) may mark signals as delivered. */
+export function isDeliveredDiagnosticBluf(bluf: string): boolean {
+  return /(?:^|\n)\**Status:\**\s*(?:Complete|Partial)\b/u.test(bluf)
+}
+
 export function isWaitingDiagnosticBluf(bluf: string): boolean {
   return /(?:^|\n)Status:\s*WAITING_FOR_(?:D0|CONTEXT)\b/u.test(bluf)
 }

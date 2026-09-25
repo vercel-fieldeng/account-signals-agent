@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { dailyScheduleWindow, dailySignalWindow, dueDailyScheduleDate } from "./daily-schedule"
+import { dailyScheduleWindow, dailySignalWindow, dueDailyScheduleDate, signalLookbackWindow } from "./daily-schedule"
 
 describe("Berlin daily schedule", () => {
   it("becomes due at 08:00 Europe/Berlin in summer time", () => {
@@ -21,6 +21,19 @@ describe("Berlin daily schedule", () => {
     const autumn = dailyScheduleWindow("2026-10-25")
     expect(autumn.start.toISOString()).toBe("2026-10-24T06:00:00.000Z")
     expect(autumn.end.toISOString()).toBe("2026-10-25T07:00:00.000Z")
+  })
+
+  it("uses a trailing seven complete UTC days so blocked or late days are re-checked", () => {
+    expect(signalLookbackWindow("2026-09-25")).toEqual({
+      start: new Date("2026-09-18T00:00:00.000Z"),
+      end: new Date("2026-09-25T00:00:00.000Z"),
+    })
+    expect(signalLookbackWindow("2026-10-25", 2)).toEqual({
+      start: new Date("2026-10-23T00:00:00.000Z"),
+      end: new Date("2026-10-25T00:00:00.000Z"),
+    })
+    expect(() => signalLookbackWindow("2026-09-25", 0)).toThrow("Invalid signal lookback")
+    expect(() => signalLookbackWindow("2026-02-30")).toThrow("Invalid daily signal date")
   })
 
   it("uses the previous complete UTC day for date-grained signals, including across DST", () => {

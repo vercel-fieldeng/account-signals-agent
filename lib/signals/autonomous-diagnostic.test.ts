@@ -67,6 +67,7 @@ function options(overrides: Partial<DiagnosticRunnerOptions> = {}): DiagnosticRu
     store: store(),
     getToken: tokenGetter() as DiagnosticRunnerOptions["getToken"],
     dispatch: vi.fn(async () => ({ id: "session-1" })),
+    reportedSignals: { listRecent: async () => [] },
     now: () => new Date("2026-09-14T13:42:00.000Z"),
     ...overrides,
   }
@@ -109,7 +110,7 @@ describe("owner-bound autonomous diagnostic", () => {
     expect(state.markDispatched).toHaveBeenCalledWith(expect.anything(), "accepted")
   })
 
-  it("uses the daily job date for the previous complete UTC signal day across DST", async () => {
+  it("uses the daily job date for a trailing complete UTC lookback across DST", async () => {
     const dailyClaim = claim()
     dailyClaim.job.id = "daily:2026-10-25"
     const dispatch = vi.fn(async () => ({ id: "daily-session" }))
@@ -118,7 +119,26 @@ describe("owner-bound autonomous diagnostic", () => {
       store: store({ claimDue: async () => dailyClaim }),
       dispatch,
     }))
-    expect(dispatch).toHaveBeenCalledWith(owner, expect.stringContaining("[2026-10-24T00:00:00.000Z, 2026-10-25T00:00:00.000Z)"))
+    expect(dispatch).toHaveBeenCalledWith(owner, expect.stringContaining("[2026-10-18T00:00:00.000Z, 2026-10-25T00:00:00.000Z)"))
+  })
+
+  it("excludes already reported signal IDs from the d0 request", async () => {
+    const dispatch = vi.fn(async () => ({ id: "session" }))
+    await runAutonomousDiagnostic(options({ dispatch, reportedSignals: { listRecent: async () => ["sig-a", "sig-b"] } }))
+    const prompt = String((dispatch.mock.calls[0] as unknown[])[1])
+    expect(prompt).toContain("already-reported IDs: sig-a, sig-b.")
+    expect(prompt).not.toContain("ledger was unavailable")
+  })
+
+  it("still dispatches without exclusions when the reported-signal ledger is unavailable", async () => {
+    const dispatch = vi.fn(async () => ({ id: "session" }))
+    const log = vi.spyOn(console, "info").mockImplementation(() => undefined)
+    const result = await runAutonomousDiagnostic(options({ dispatch, reportedSignals: { listRecent: async () => { throw new Error("blob down") } } }))
+    log.mockRestore()
+    expect(result).toEqual({ kind: "dispatched", sessionId: "session" })
+    const prompt = String((dispatch.mock.calls[0] as unknown[])[1])
+    expect(prompt).toContain("No signal IDs have been reported yet")
+    expect(prompt).toContain("ledger was unavailable, so previously reported signals may repeat")
   })
 
   it("checks only d0 with the stable user subject and forceRefresh, without exposing tokens", async () => {
@@ -193,14 +213,23 @@ describe("owner-bound autonomous diagnostic", () => {
 
   it("uses one d0 request followed by bounded optional Salesforce and Index enrichment", () => {
     const prompt = diagnosticPrompt(new Date("2026-09-14T23:59:59.999Z"))
-    expect(prompt).toContain("[2026-09-13T00:00:00.000Z, 2026-09-14T00:00:00.000Z)")
+    expect(prompt).toContain("[2026-09-07T00:00:00.000Z, 2026-09-14T00:00:00.000Z)")
     expect(prompt).toContain("date-grained at 00:00 UTC")
-    expect(prompt).toContain("A zero-row result is Complete only when d0 confirms this UTC day is settled")
-    expect(prompt).toContain("No surfaced intent in the last day")
-    expect(prompt).toContain("· 1d ·")
+    expect(prompt).toContain("never call a day final")
+    expect(prompt).toContain("say the remainder follows in the next brief")
+    expect(prompt).toContain("No new surfaced intent")
+    expect(prompt).toContain("· 7d ·")
     expect(prompt).toContain("New intent signals — Sam Maass SE book")
     expect(prompt).toContain("SE = Sam Maass")
-    expect(prompt).toContain("return up to 10 rows")
+    expect(prompt).toContain("is_surfaced = TRUE")
+    expect(prompt).toContain("do not run, modify, or post it")
+    expect(prompt).toContain("Order by signal_date ascending (oldest first)")
+    expect(prompt).toContain("return up to 25 rows")
+    expect(prompt).toContain("ACCOUNT_INTENT_SIGNAL_ID")
+    expect(prompt).toContain("Reported signal IDs: <comma-separated ACCOUNT_INTENT_SIGNAL_ID")
+    expect(prompt).toContain("never include it for Blocked")
+    expect(prompt).toContain("every returned row must appear here")
+    expect(prompt).toContain("No signal IDs have been reported yet; exclude nothing.")
     expect(prompt).toContain("DISCOVER mode exactly once")
     expect(prompt).toContain("poll that same invocation to terminal")
     expect(prompt).toContain("select at most three returned accounts for context enrichment")
@@ -225,6 +254,6 @@ describe("owner-bound autonomous diagnostic", () => {
     expect(prompt).not.toContain("full requested SE book")
 
     const dstPrompt = diagnosticPrompt(new Date("2026-10-25T12:00:00.000Z"), "2026-10-25")
-    expect(dstPrompt).toContain("[2026-10-24T00:00:00.000Z, 2026-10-25T00:00:00.000Z)")
+    expect(dstPrompt).toContain("[2026-10-18T00:00:00.000Z, 2026-10-25T00:00:00.000Z)")
   })
 })

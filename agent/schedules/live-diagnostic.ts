@@ -17,7 +17,7 @@ const diagnosticInitialMessage = {
   fallbackText: "Account Signals — running\nRetrieving surfaced intent signals…",
 }
 
-const continuationPrompt = `Continue the existing signal brief without restarting d0. If the retained d0 invocation is pending, call agent_get and honor pollAfterMs. If d0 is terminal and Salesforce/Index context enrichment is pending, reuse its returned rows and finish the bounded enrichment for at most three accounts. Return the compact Account/Signal/Hypothesis/Contacts/Next BLUF and grouped context evidence DETAIL when complete. Use Status: WAITING_FOR_D0 or Status: WAITING_FOR_CONTEXT only when that stage is still running so the session remains resumable.`
+const continuationPrompt = `Continue the existing signal brief without restarting d0. If the retained d0 invocation is pending, call agent_get and honor pollAfterMs. If d0 is terminal and Salesforce/Index context enrichment is pending, reuse its returned rows and finish the bounded enrichment for at most three accounts. Return the compact Account/Signal/Hypothesis/Contacts/Next BLUF and grouped context evidence DETAIL when complete, ending with the Reported signal IDs line for every row listed in Evidence. Use Status: WAITING_FOR_D0 or Status: WAITING_FOR_CONTEXT only when that stage is still running so the session remains resumable.`
 
 type SlackHistoryMessage = { ts?: unknown; bot_id?: unknown; user?: unknown }
 type SlackAppIdentity = { user_id?: unknown; bot_id?: unknown }

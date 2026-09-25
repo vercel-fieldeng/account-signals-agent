@@ -1,5 +1,41 @@
 import { describe, expect, it } from "vitest"
-import { diagnosticSlackPost, isWaitingDiagnosticBluf, splitDiagnosticMessage } from "./autonomous-diagnostic-output"
+import {
+  diagnosticSlackPost,
+  extractReportedSignalIds,
+  isDeliveredDiagnosticBluf,
+  isWaitingDiagnosticBluf,
+  splitDiagnosticMessage,
+} from "./autonomous-diagnostic-output"
+
+describe("reported signal ID trailer", () => {
+  const brief = [
+    "BLUF: 2 accounts worth reviewing",
+    "Status: Complete · 7d · 2 new signals · 2 accounts · Context 2/2",
+    "DETAIL:",
+    "Evidence",
+    "*Coverage:* [2026-09-18, 2026-09-25) UTC · new rows only",
+    "Reported signal IDs: sig-1, `sig-2`, sig-1, bad<id>",
+  ].join("\n")
+
+  it("strips the machine-read line from Slack text and returns unique valid IDs", () => {
+    const { message, ids } = extractReportedSignalIds(brief)
+    expect(ids).toEqual(["sig-1", "sig-2"])
+    expect(message).not.toContain("Reported signal IDs")
+    expect(splitDiagnosticMessage(message)?.detail).toBe("Evidence\n*Coverage:* [2026-09-18, 2026-09-25) UTC · new rows only")
+  })
+
+  it("treats none or a missing line as no IDs and leaves other text unchanged", () => {
+    expect(extractReportedSignalIds("BLUF: x\nDETAIL:\ny\n*Reported signal IDs:* none")).toEqual({ message: "BLUF: x\nDETAIL:\ny", ids: [] })
+    expect(extractReportedSignalIds("BLUF: x\nDETAIL:\ny")).toEqual({ message: "BLUF: x\nDETAIL:\ny", ids: [] })
+  })
+
+  it("marks only finished briefs as delivered", () => {
+    expect(isDeliveredDiagnosticBluf("BLUF: x\nStatus: Complete · 7d")).toBe(true)
+    expect(isDeliveredDiagnosticBluf("BLUF: x\nStatus: Partial · 7d")).toBe(true)
+    expect(isDeliveredDiagnosticBluf("BLUF: x\nStatus: Blocked · 7d")).toBe(false)
+    expect(isDeliveredDiagnosticBluf("BLUF: x\nStatus: WAITING_FOR_D0 · 7d")).toBe(false)
+  })
+})
 
 describe("autonomous diagnostic Slack envelope", () => {
   it("splits the BLUF root from one detail reply", () => {

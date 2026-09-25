@@ -73,6 +73,19 @@ export function dailyScheduleWindow(dailyDate: string): { start: Date; end: Date
   }
 }
 
+/** Complete UTC days re-checked by each brief so blocked runs and late rows are delivered later. */
+export const SIGNAL_LOOKBACK_DAYS = 7
+
+/** Returns the trailing complete UTC days ending before the job's calendar date. */
+export function signalLookbackWindow(dailyDate: string, days = SIGNAL_LOOKBACK_DAYS): { start: Date; end: Date } {
+  if (!calendarDate(dailyDate)) throw new Error("Invalid daily signal date")
+  if (!Number.isSafeInteger(days) || days < 1 || days > 14) throw new Error("Invalid signal lookback")
+  return {
+    start: new Date(`${shiftCalendarDate(dailyDate, -days)}T00:00:00.000Z`),
+    end: new Date(`${dailyDate}T00:00:00.000Z`),
+  }
+}
+
 /** Returns the previous complete UTC day for a date-grained signal source. */
 export function dailySignalWindow(dailyDate: string): { start: Date; end: Date } {
   if (!calendarDate(dailyDate)) throw new Error("Invalid daily signal date")

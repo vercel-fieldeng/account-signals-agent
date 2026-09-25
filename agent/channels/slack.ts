@@ -12,9 +12,12 @@ import { AutomationAdmissionError, classifyAutomationCommand } from '../../lib/s
 import { handleAutomationControl } from '../../lib/signals/automation-control';
 import {
   diagnosticSlackPost,
+  extractReportedSignalIds,
+  isDeliveredDiagnosticBluf,
   isWaitingDiagnosticBluf,
   splitDiagnosticMessage,
 } from '../../lib/signals/autonomous-diagnostic-output';
+import { ReportedSignalStore } from '../../lib/signals/reported-signals';
 import { isAutonomousSlackThreadRoot } from '../../lib/signals/slack-root';
 
 async function isAutonomousDiagnosticThread(ctx: SlackEventContext): Promise<boolean> {
@@ -91,18 +94,30 @@ export default slackChannel({
         await ctx.thread.startTyping();
         return;
       }
-      const parts = splitDiagnosticMessage(event.message);
+      const { message, ids } = extractReportedSignalIds(event.message);
+      const parts = splitDiagnosticMessage(message);
       if (!parts) {
         if (await isAutonomousDiagnosticThread(ctx)) {
           console.info('diagnostic_interim_message_suppressed');
           return;
         }
-        await ctx.thread.post(event.message);
+        await ctx.thread.post(message);
         return;
       }
       const rootUpdated = await updateDiagnosticRoot(ctx, diagnosticSlackPost(parts.bluf));
       if (!rootUpdated) await ctx.thread.post(diagnosticSlackPost(parts.bluf));
-      if (!isWaitingDiagnosticBluf(parts.bluf)) await ctx.thread.post(diagnosticSlackPost(parts.detail));
+      if (isWaitingDiagnosticBluf(parts.bluf)) return;
+      await ctx.thread.post(diagnosticSlackPost(parts.detail));
+      // Mark signals delivered only after Slack accepted both posts, and only
+      // for the bot-owned daily brief. A failure here repeats, never drops.
+      if (ids.length > 0 && isDeliveredDiagnosticBluf(parts.bluf) && (rootUpdated || await isAutonomousDiagnosticThread(ctx))) {
+        try {
+          const added = await new ReportedSignalStore().record(ids);
+          console.info(JSON.stringify({ event: 'autonomous_diagnostic.signals_recorded', received: ids.length, added }));
+        } catch {
+          console.warn('autonomous_diagnostic.signals_record_failed');
+        }
+      }
     },
   },
 });
