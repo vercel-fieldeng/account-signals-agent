@@ -3,6 +3,7 @@ import { AUTOMATION_CONNECTORS } from "./automation-setup"
 import { AUTOMATION_CHANNEL_ID, validateAutomationOwner, type AutomationOwner } from "./automation-policy"
 import { AutomationStateStore } from "./automation-state"
 import { SIGNAL_LOOKBACK_DAYS, signalLookbackWindow } from "./daily-schedule"
+import { NEWS_LOOKBACK_DAYS } from "./account-news"
 import { isReportedSignalId, ReportedSignalStore } from "./reported-signals"
 
 export const DIAGNOSTIC_ROW_LIMIT = 25
@@ -27,10 +28,12 @@ export function diagnosticPrompt(now: Date, dailyDate?: string, reported: Report
     : " The reported-signal ledger was unavailable, so previously reported signals may repeat; say so once in Coverage."
   return `AUTONOMOUS D0 SIGNAL BRIEF
 
-Run one read-only d0 query and turn its result into a concise Slack brief. Use the supplied user identity unchanged. Salesforce, public web research, careers, news, and external context are optional and must not delay or block the d0 result.
+Run one read-only d0 query and one account news scan, and turn their results into a concise Slack brief. Use the supplied user identity unchanged. Salesforce, Index, and the news scan are optional and must not delay or block the d0 result.
 
 Immediately call the root d0 connection in DISCOVER mode exactly once with this request:
 “Using the stored definition of the semantic alert ‘New intent signals — Sam Maass SE book’ (GTM.ANALYTICS.ACCOUNT_INTENT_SIGNALS joined to GTM.ANALYTICS.ACCOUNTS on sfdc_account_id, semantic assignment ‘SE = Sam Maass’ via ACCOUNTS.sales_engineer_name, is_surfaced = TRUE), return signals for the last ${SIGNAL_LOOKBACK_DAYS} complete UTC calendar days [${signalStart}, ${signalEnd}). Replace the alert's rolling 24-hour predicate with these exact half-open midnight boundaries; signal timestamps are date-grained at 00:00 UTC, so do not substitute a rolling or Berlin-local window. The alert's paused schedule does not matter; do not run, modify, or post it. ${exclusionClause(reported)} Order by signal_date ascending (oldest first), then account, and return up to ${DIAGNOSTIC_ROW_LIMIT} rows, one per account and signal. For every row return ACCOUNT_INTENT_SIGNAL_ID, account name, signal source, person/title or entity, signal_date, full signal detail, category or family, and grain. Also return flip count/detail, fetch count/detail, source freshness, and whether more matching rows exist beyond the limit.”
+
+Right after starting d0, call scan_account_news exactly once with no arguments; it is independent of d0, so do not wait for d0 first. It scans the whole account watchlist for public news from the last ${NEWS_LOOKBACK_DAYS} days and returns only events an LLM judge rated as a material Opportunity or Risk for Vercel, excluding events already delivered. Most days it returns no events: then omit news from the brief entirely and never write that there was no news. Report each returned event exactly as returned; never add, upgrade, or reinterpret events, and never search the web yourself. If the scan is unavailable or fails, continue and note it once in Coverage.
 
 Retain the invocation handle and poll that same invocation to terminal, honoring every pollAfterMs. Never restart it. Treat d0's applied filter and returned rows as the scope evidence; do not claim they prove the total size of the SE book. Source rows can load a day late; this window deliberately re-checks earlier days on every run and previously reported IDs are excluded, so never call a day final. A result is Complete when d0 returns successfully and no matching rows remain beyond the limit, including zero rows. If more rows remain, report Partial and say the remainder follows in the next brief.${ledgerNote} Do not invent accounts, owners, quantities, trends, or outreach routing.
 
@@ -38,13 +41,13 @@ When d0 completes, select at most three returned accounts for context enrichment
 
 Index and Salesforce context are optional enrichment, not gates. If Index or sfdc_lookup fails, continue with the d0 rows, lower hypothesis confidence, and state the missing context once. Never restart d0, invent an Account ID, merge similarly named accounts, or initiate a Salesforce authorization flow. Construct an Account link only from an exact Salesforce ID returned for that account, using https://vercel.lightning.force.com/lightning/r/Account/<ID>/view.
 
-For each account, synthesize the signal with current CRM motion and customer-stated priorities, blockers, stakeholders, and next steps. Explicitly distinguish Existing motion, Possible new motion, or Unclear. A hypothesis needs both the d0 signal and at least one attributable Salesforce or transcript fact; otherwise label it “Context unavailable; hypothesis not generated.” Confidence is High only when persona, signal, and customer-stated priority align; Medium when plausible but unconfirmed; Low when context is weak or stale.
+For each account, synthesize the signal with current CRM motion and customer-stated priorities, blockers, stakeholders, and next steps. Explicitly distinguish Existing motion, Possible new motion, or Unclear. A hypothesis needs both the d0 signal and at least one attributable Salesforce, transcript, or returned news-event fact; otherwise label it “Context unavailable; hypothesis not generated.” Confidence is High only when persona, signal, and customer-stated priority align; Medium when plausible but unconfirmed; Low when context is weak or stale.
 
-The channel root is a scan, not a report. Keep the entire BLUF under 1,400 characters and each account card under 420 characters. Every field must be exactly one short line. Remove filler, repeated evidence, full meeting summaries, dates, and generic caveats from BLUF; retain them in DETAIL. In Contacts, name the strongest signal actor, summarize additional actors as “+N”, and name at most two existing-motion stakeholders after “Route:”.
+The channel root is a scan, not a report. Keep the entire BLUF under 2,000 characters, each account card under 420 characters, and each news card under 360 characters. Every field must be exactly one short line. Remove filler, repeated evidence, full meeting summaries, dates, and generic caveats from BLUF; retain them in DETAIL. In Contacts, name the strongest signal actor, summarize additional actors as “+N”, and name at most two existing-motion stakeholders after “Route:”.
 
 Output exactly in Slack-compatible mrkdwn:
-BLUF: <dynamic outcome headline: “N accounts worth reviewing”, “No new surfaced intent”, “Signal retrieval still running”, “Context enrichment still running”, or “Signal brief needs attention”>
-Status: <Complete, Partial, Blocked, WAITING_FOR_D0, or WAITING_FOR_CONTEXT> · ${SIGNAL_LOOKBACK_DAYS}d · <N new signals> · <N accounts> · Context <N/N or partial>
+BLUF: <dynamic outcome headline: “N accounts worth reviewing” (count accounts with signal cards or news cards), “No new surfaced intent”, “Signal retrieval still running”, “Context enrichment still running”, or “Signal brief needs attention”>
+Status: <Complete, Partial, Blocked, WAITING_FOR_D0, or WAITING_FOR_CONTEXT> · ${SIGNAL_LOOKBACK_DAYS}d · <N new signals> · <N accounts> · Context <N/N or partial> · News <N events or unavailable>
 
 *Account:* <Salesforce link if verified, otherwise account name>
 *Signal:* <max 110 characters; count + compact event/person summary>
@@ -53,6 +56,12 @@ Status: <Complete, Partial, Blocked, WAITING_FOR_D0, or WAITING_FOR_CONTEXT> · 
 *Next:* <max 100 characters; one imperative action>
 
 <repeat for at most three accounts; omit numbering for zero rows>
+
+*News:* <Opportunity or Risk> · <Salesforce link from the event's salesforceAccountId if present, otherwise account name> · <<url>|<title, max 90 characters>>
+*Why:* <max 150 characters; whyVercel>
+*Next:* <max 100 characters; nextStep>
+
+<one news card per returned event, at most three in BLUF, after the signal cards; omit entirely when the scan returned no events>
 Do not include Context or Date fields in BLUF. Do not put Index links, source narration, or evidence qualifiers in BLUF.
 
 DETAIL:
@@ -65,14 +74,18 @@ Evidence
 
 <repeat for every returned account>
 
-*Coverage:* [${signalStart}, ${signalEnd}) UTC · new rows only · <d0 completeness/truncation> · Context <N/N or partial> · <aggregate flip/fetch status>. Keep this to one line.
-Reported signal IDs: <comma-separated ACCOUNT_INTENT_SIGNAL_ID of every row listed in Evidence, exactly as d0 returned them, or none>
+Account news
+• <Mon DD from publishedAt> · <account> · <Opportunity or Risk> — <whatHappened> · <<url>|publisher>
+<one bullet per returned event, including events beyond the three BLUF cards; omit this section when the scan returned no events>
 
-The Reported signal IDs line is machine-read and hidden from Slack; it marks those signals as delivered so later briefs skip them. Include it only in a Complete or Partial brief, list only IDs d0 actually returned, and never include it for Blocked, WAITING_FOR_D0, or WAITING_FOR_CONTEXT. If d0 did not return IDs, write none and report Partial.
+*Coverage:* [${signalStart}, ${signalEnd}) UTC · new rows only · <d0 completeness/truncation> · Context <N/N or partial> · <aggregate flip/fetch status> · News <searched/total accounts scanned, or unavailable; note pendingBeyondLimit if above zero>. Keep this to one line.
+Reported signal IDs: <comma-separated ACCOUNT_INTENT_SIGNAL_ID of every row listed in Evidence, exactly as d0 returned them, followed by the id of every news event listed in Account news, or none>
 
-If d0 is still running when this turn must end, use the retrieval headline and Status: WAITING_FOR_D0 with the existing one-sentence update in DETAIL. If d0 is terminal but context tools are still running, preserve the returned rows and use the context headline with Status: WAITING_FOR_CONTEXT; do not restart d0 on continuation. If d0 fails terminally, use the attention headline and Status: Blocked with one concrete next step; nothing is marked reported, so the next daily brief re-checks this window automatically. Do not expose tool lifecycle, SQL, credentials, internal IDs except verified Salesforce Account IDs in links and the hidden Reported signal IDs line, or raw diagnostics.
+The Reported signal IDs line is machine-read and hidden from Slack; it marks those signals as delivered so later briefs skip them. Include it only in a Complete or Partial brief, list only IDs d0 or scan_account_news actually returned, and never include it for Blocked, WAITING_FOR_D0, or WAITING_FOR_CONTEXT. If d0 did not return IDs, write none and report Partial.
 
-Do not call collect_external_signals or web research during this diagnostic. Salesforce and Index enrichment must remain read-only and bounded to the surfaced accounts. Do not write baselines, mutate customer systems, publish exports, call setup_automation, or create schedules.`
+If d0 is still running when this turn must end, use the retrieval headline and Status: WAITING_FOR_D0 with the existing one-sentence update in DETAIL. If d0 is terminal but context tools are still running, preserve the returned rows and use the context headline with Status: WAITING_FOR_CONTEXT; do not restart d0 on continuation. If d0 fails terminally, use the attention headline and Status: Blocked with one concrete next step; nothing is marked reported, so the next daily brief re-checks this window automatically. Still include returned news events in a Blocked brief; they stay pending and are repeated until a Complete or Partial brief records them. Do not expose tool lifecycle, SQL, credentials, internal IDs except verified Salesforce Account IDs in links and the hidden Reported signal IDs line, or raw diagnostics.
+
+Do not call collect_external_signals or any web research other than the single scan_account_news call. Salesforce and Index enrichment must remain read-only and bounded to the surfaced accounts. Do not write baselines, mutate customer systems, publish exports, call setup_automation, or create schedules.`
 }
 
 type RunnerStore = Pick<AutomationStateStore, "read" | "claimDue" | "authorizeDispatch" | "markDispatched" | "block">

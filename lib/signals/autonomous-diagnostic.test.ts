@@ -245,7 +245,14 @@ describe("owner-bound autonomous diagnostic", () => {
     for (const field of ["*Account:*", "*Signal:*", "*Hypothesis:*", "*Contacts:*", "*Next:*"]) {
       expect(prompt).toContain(field)
     }
-    expect(prompt).toContain("entire BLUF under 1,400 characters")
+    expect(prompt).toContain("entire BLUF under 2,000 characters")
+    expect(prompt).toContain("call scan_account_news exactly once with no arguments")
+    expect(prompt).toContain("public news from the last 7 days")
+    expect(prompt).toContain("omit news from the brief entirely and never write that there was no news")
+    expect(prompt).toContain("*News:* <Opportunity or Risk>")
+    expect(prompt).toContain("followed by the id of every news event listed in Account news")
+    expect(prompt).toContain("Still include returned news events in a Blocked brief")
+    expect(prompt).toContain("Do not call collect_external_signals or any web research other than the single scan_account_news call")
     expect(prompt).toContain("each account card under 420 characters")
     expect(prompt).toContain("Do not include Context or Date fields in BLUF")
     expect(prompt).toContain("• *Context:* Salesforce:")

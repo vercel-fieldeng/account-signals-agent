@@ -37,6 +37,10 @@ For each account, the acceptance test is a public `careersUrl` that returns a co
 
 For each account, the acceptance test is a public first-party news/article URL, discovered directly or through a permitted public sitemap/feed or account-scoped Exa search, that can be fetched and parsed into a `company_news` source reference with `company_article` or `company_post` evidence. The test should verify that the stored URL is canonical when a canonical link exists, the excerpt is traceable to the page, and a re-fetch deduplicates the same source record. If no qualifying first-party article/post is available, produce no news signal and record unsupported/partial status as applicable.
 
+### Exception: account news monitor (third-party news)
+
+`scan_account_news` deliberately goes beyond the first-party-only rule above. It uses Exa news results from any publisher, and their highlights, as input to an LLM judge that decides whether an event is a material opportunity or risk for Vercel. It emits cited brief entries with the article link, not `company_news` records, and does not write baselines or shared signal contracts. It is gated by `EXTERNAL_SOURCES_ENABLED=1` and `EXTERNAL_SOURCE_TERMS_APPROVED=1`. Confirm that the Exa terms and legal review cover third-party news before relying on it; LinkedIn remains excluded.
+
 ## Search-provider and LinkedIn policy
 
 Authenticated LinkedIn scraping is explicitly out of scope. Do not log in, reuse a user session, automate a browser against an authenticated LinkedIn page, bypass access controls, or collect LinkedIn content with cookies or personal credentials. The account’s `linkedinCompanyUrl` is metadata/discovery context only and must not be used as evidence by the active collectors.
